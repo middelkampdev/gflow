@@ -2,6 +2,7 @@ pub mod start;
 pub mod finish_work;
 pub mod finish_release;
 pub mod finish_hotfix;
+pub mod deploy_version;
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -64,16 +65,6 @@ pub(crate) fn push_if_needed(git: &dyn Git, branch: &str) -> Result<(), String> 
         return Ok(());
     }
     git.push(branch)
-}
-
-/// Create annotated tag `tag` unless it already exists locally.
-pub(crate) fn tag_if_missing(git: &dyn Git, tag: &str, message: &str) -> Result<(), String> {
-    if git.tag_exists(tag)? {
-        println!("↷ skipped: tag {tag} (already exists)");
-        return Ok(());
-    }
-    println!("Tagging: {tag}");
-    git.create_tag(tag, message)
 }
 
 /// Push `tag` unless origin already has it. The push answers that itself, so
@@ -264,12 +255,10 @@ pub(crate) fn ensure_landing_branch(git: &dyn Git, source: &str, target: &str, r
     {
         return Ok(landing);
     }
-    if !git.local_branch_exists(&landing)? {
-        if remote {
-            git.create_branch_no_checkout(&landing, &origin_landing)?;
-        } else {
-            git.create_branch_no_checkout(&landing, source)?;
-        }
+    let local = git.local_branch_exists(&landing)?;
+    let fresh = !remote && !local;
+    if !local {
+        git.create_branch_no_checkout(&landing, if remote { &origin_landing } else { source })?;
     }
     if !git.is_ancestor(source, &landing)? || (remote && !git.is_ancestor(&origin_landing, &landing)?) {
         println!("Refreshing {landing} with {source}...");
@@ -282,12 +271,20 @@ pub(crate) fn ensure_landing_branch(git: &dyn Git, source: &str, target: &str, r
             .map_err(|e| format!("{e}\n{}", landing_merge_conflict_hint(&landing, source, rerun)))?;
         git.checkout(&prior)?;
     }
-    if !git.is_ancestor(&origin_target, &landing)? {
+    // A new landing branch always merges its target in, so every landing
+    // looks the same, also when the target did not move since the cut.
+    let contained = git.is_ancestor(&origin_target, &landing)?;
+    if fresh || !contained {
         println!("Merging {target} into {landing}...");
         let prior = git.current_branch()?;
         git.checkout(&landing)?;
-        git.merge(&origin_target, &format!("chore: merge {target} into {landing}"))
-            .map_err(|e| format!("{e}\n{}", landing_merge_conflict_hint(&landing, source, rerun)))?;
+        let message = format!("chore: merge {target} into {landing}");
+        if contained {
+            git.merge_contained(&origin_target, &message)?;
+        } else {
+            git.merge(&origin_target, &message)
+                .map_err(|e| format!("{e}\n{}", landing_merge_conflict_hint(&landing, source, rerun)))?;
+        }
         git.checkout(&prior)?;
     }
     git.push(&landing)?;
@@ -478,24 +475,70 @@ pub(crate) enum VersionPrCompletion {
     Manual,
 }
 
-/// Version PRs are machine-owned, so gflow completes them itself: auto-complete
-/// first, so required checks and reviews still gate the merge; merging now
-/// when the platform offers no auto-complete; a human otherwise. The PR is
-/// already open and announced, so a failure here is a warning, never an error.
-pub(crate) fn complete_version_pr(hosting: &dyn HostingPlatform, url: &str) -> VersionPrCompletion {
-    let Err(auto_complete) = hosting.enable_auto_complete(url) else {
-        println!("Auto-complete is on: the platform squash-merges this PR once its checks pass.");
-        return VersionPrCompletion::AutoComplete;
-    };
-    match hosting.merge_pr(url) {
-        Ok(()) => {
-            println!("✔ Squash-merged {url}");
-            VersionPrCompletion::Merged
+/// Puts the version change for `version` on `version/<version>-into-<target>`
+/// and opens its PR; a branch a previous run already pushed is reused as is.
+/// Ends on `target`. `None` when the script changed nothing: there is no PR,
+/// and the local version branch is gone again.
+pub(crate) fn open_version_pr(git: &dyn Git, hosting: &dyn HostingPlatform, script: &dyn VersionScript, target: &str, version: &SemVer) -> Result<Option<String>, String> {
+    let version_branch = version.version_branch(target);
+    let title = format!("chore: set version {version}");
+
+    if git.remote_branch_exists(&version_branch)? {
+        let url = hosting.create_or_get_pr(&version_branch, target, &title, PrBody::NativeDefault)?;
+        announce_version_pr(hosting, &title, &url);
+        return Ok(Some(url));
+    }
+
+    require_clean_tree(git)?;
+    // A prior run can leave this branch behind locally (created, then
+    // interrupted before the script committed or pushed). It is machine-owned,
+    // so gflow clears it itself rather than dying on git's raw "branch already
+    // exists" — remote-exists is already handled by the reuse path above.
+    if git.local_branch_exists(&version_branch)? {
+        git.delete_branch_local(&version_branch)?;
+    }
+    git.create_branch(&version_branch, target)?;
+    match run_version_script(git, script, version) {
+        Ok(true) => {
+            git.push(&version_branch)?;
+            let url = hosting.create_or_get_pr(&version_branch, target, &title, PrBody::NativeDefault)?;
+            announce_version_pr(hosting, &title, &url);
+            // Off the version branch first: a merge now deletes it.
+            git.checkout(target)?;
+            Ok(Some(url))
         }
-        Err(merge) => {
+        Ok(false) => {
+            git.checkout(target)?;
+            git.delete_branch_local(&version_branch)?;
+            Ok(None)
+        }
+        Err(e) => {
+            // Best-effort: don't strand the operator on the version branch.
+            let _ = git.checkout(target);
+            Err(e)
+        }
+    }
+}
+
+/// Version PRs are machine-owned, so gflow completes them itself: a merge now
+/// first, so the tag lands on the squash commit in the same run; auto-complete
+/// when the platform will not merge yet (pending checks or reviews), and the
+/// tag waits for a re-run; a human otherwise. The PR is already open and
+/// announced, so a failure here is a warning, never an error.
+pub(crate) fn complete_version_pr(hosting: &dyn HostingPlatform, url: &str) -> VersionPrCompletion {
+    let Err(merge) = hosting.merge_pr(url) else {
+        println!("✔ Squash-merged {url}");
+        return VersionPrCompletion::Merged;
+    };
+    match hosting.enable_auto_complete(url) {
+        Ok(()) => {
+            println!("Auto-complete is on: the platform squash-merges this PR once its checks pass.");
+            VersionPrCompletion::AutoComplete
+        }
+        Err(auto_complete) => {
             eprintln!("⚠ gflow could not complete this PR. Squash-merge it yourself.");
-            eprintln!("  Auto-complete: {auto_complete}");
             eprintln!("  Merge: {merge}");
+            eprintln!("  Auto-complete: {auto_complete}");
             VersionPrCompletion::Manual
         }
     }
@@ -510,30 +553,32 @@ pub(crate) fn open_pr_in_browser(hosting: &dyn HostingPlatform, url: &str) {
     }
 }
 
-/// Cut `tag` at `sha` (a PR's merge commit) unless it already exists — and
-/// when it does, verify it points at that same commit rather than trusting a
-/// stale or hand-created tag (a mismatch is fatal, not silently skipped).
-///
-/// Callers establish that the tag is not already on the mainline before
-/// reaching here, so the equal-commit arm is unreachable through them: a tag
-/// matching `sha` would be a tag on the merge commit, which is on the mainline
-/// by definition. It stays as a guard for any future caller without that
-/// precondition.
-pub fn tag_at_if_missing(git: &dyn Git, tag: &str, message: &str, sha: &str) -> Result<(), String> {
+/// The release or hotfix tag already reached the mainline: its main leg has
+/// landed, also when the main PR lookup now shows a newer, unmerged PR.
+pub(crate) fn tag_on_mainline(git: &dyn Git, tag: &str, main_branch: &str) -> Result<bool, String> {
+    Ok(git.tag_exists(tag)? && git.is_ancestor(&git.tag_commit_sha(tag)?, &format!("origin/{main_branch}"))?)
+}
+
+/// Tags the tested build — the tip of the release or hotfix `source` — before
+/// any merge, and pushes the tag. A tag already on that tip is kept, and so is
+/// one an older gflow cut on the mainline's merge commit. Anywhere else, the
+/// commits after it were never tested, so the finish stops.
+pub(crate) fn tag_tip_before_landing(git: &dyn Git, tag: &str, message: &str, source: &str, main_branch: &str) -> Result<(), String> {
+    let tip = git.branch_sha(source)?;
     if !git.tag_exists(tag)? {
-        println!("Tagging: {tag}");
-        return git.create_tag_at(tag, message, sha);
-    }
-    let actual = git.tag_commit_sha(tag)?;
-    if actual == sha {
-        println!("↷ skipped: tag {tag} (already exists)");
-        Ok(())
+        println!("Tagging the tested tip of {source}: {tag}");
+        git.create_tag_at(tag, message, &tip)?;
     } else {
-        Err(format!(
-            "Tag {tag} exists but points at {actual}, not the PR merge commit {sha}. \
-             Move or delete the tag, then re-run 'gflow finish'."
-        ))
+        let tagged = git.tag_commit_sha(tag)?;
+        if tagged != tip && !git.is_ancestor(&tagged, &format!("origin/{main_branch}"))? {
+            return Err(format!(
+                "Tag {tag} points at {tagged}, but {source} is at {tip}: the commits after the tag were never tested.\n\
+                 Move or delete the tag, then re-run 'gflow finish'."
+            ));
+        }
+        println!("↷ skipped: tag {tag} (already exists)");
     }
+    push_tag_if_missing(git, tag)
 }
 
 /// Delete `branch` locally and remotely, each guarded by an existence check so
@@ -798,26 +843,63 @@ mod tests {
         assert_each_git_failure(&["is_pushed:source", "push:source"], MockGit::new, |git| {
             push_if_needed(git, "source")
         });
-        assert_each_git_failure(
-            &["tag_exists:v1.0.0", "create_tag:v1.0.0:release"],
-            MockGit::new,
-            |git| tag_if_missing(git, "v1.0.0", "release"),
-        );
         assert_each_git_failure(&["push_tag:v1.0.0"], MockGit::new, |git| push_tag_if_missing(git, "v1.0.0"));
         assert_each_git_failure(
-            &["tag_exists:v1.0.0", "create_tag_at:v1.0.0:release:merged"],
-            MockGit::new,
-            |git| tag_at_if_missing(git, "v1.0.0", "release", "merged"),
+            &["branch_sha:release/1.0.0", "tag_exists:v1.0.0", "create_tag_at:v1.0.0:release:tip", "push_tag:v1.0.0"],
+            tip_git,
+            |git| tag_tip_before_landing(git, "v1.0.0", "release", "release/1.0.0", "main"),
         );
         assert_each_git_failure(
-            &["tag_exists:v1.0.0", "tag_commit_sha:v1.0.0"],
-            || {
-                let mut git = MockGit::new();
-                git.existing_tags.insert("v1.0.0".into());
-                git
-            },
-            |git| tag_at_if_missing(git, "v1.0.0", "release", "merged"),
+            &["branch_sha:release/1.0.0", "tag_exists:v1.0.0", "tag_commit_sha:v1.0.0", "is_ancestor:elsewhere:origin/main"],
+            || tagged_git("elsewhere"),
+            |git| tag_tip_before_landing(git, "v1.0.0", "release", "release/1.0.0", "main"),
         );
+    }
+
+    #[test]
+    fn a_tag_on_the_mainline_needs_every_read_to_succeed() {
+        assert_each_git_failure(
+            &["tag_exists:v1.0.0", "tag_commit_sha:v1.0.0", "is_ancestor:main-merge:origin/main"],
+            || tagged_git("main-merge"),
+            |git| tag_on_mainline(git, "v1.0.0", "main").map(|_| ()),
+        );
+    }
+
+    fn tip_git() -> MockGit {
+        let mut git = MockGit::new();
+        git.branch_shas.insert("release/1.0.0".into(), "tip".into());
+        git
+    }
+
+    fn tagged_git(at: &str) -> MockGit {
+        let mut git = tip_git();
+        git.existing_tags.insert("v1.0.0".into());
+        git.tag_commits.insert("v1.0.0".into(), at.into());
+        git
+    }
+
+    #[test]
+    fn the_tested_tip_is_tagged_before_landing() {
+        let git = tip_git();
+        tag_tip_before_landing(&git, "v1.0.0", "release", "release/1.0.0", "main").unwrap();
+        assert_eq!(git.calls(), ["branch_sha:release/1.0.0", "tag_exists:v1.0.0", "create_tag_at:v1.0.0:release:tip", "push_tag:v1.0.0"]);
+    }
+
+    #[test]
+    fn an_existing_tag_is_kept_on_the_tip_or_on_the_mainline_and_refused_elsewhere() {
+        let git = tagged_git("tip");
+        tag_tip_before_landing(&git, "v1.0.0", "release", "release/1.0.0", "main").unwrap();
+        assert_eq!(git.calls(), ["branch_sha:release/1.0.0", "tag_exists:v1.0.0", "tag_commit_sha:v1.0.0", "push_tag:v1.0.0"]);
+
+        let mut git = tagged_git("main-merge");
+        git.ancestors.insert(("main-merge".into(), "origin/main".into()));
+        tag_tip_before_landing(&git, "v1.0.0", "release", "release/1.0.0", "main").unwrap();
+        assert_eq!(git.calls().last().unwrap(), "push_tag:v1.0.0");
+
+        let git = tagged_git("old-tip");
+        let error = tag_tip_before_landing(&git, "v1.0.0", "release", "release/1.0.0", "main").unwrap_err();
+        assert_eq!(error, "Tag v1.0.0 points at old-tip, but release/1.0.0 is at tip: the commits after the tag were never tested.\nMove or delete the tag, then re-run 'gflow finish'.");
+        assert!(!git.calls().iter().any(|c| c.starts_with("push_tag") || c.starts_with("create_tag")));
     }
 
     #[test]
@@ -1214,23 +1296,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn an_existing_tag_is_reused_only_at_the_expected_merge_commit() {
-        for actual in ["merged", "different-commit"] {
-            let mut git = MockGit::new();
-            git.existing_tags.insert("v1.0.0".into());
-            git.tag_commits.insert("v1.0.0".into(), actual.into());
-            let result = tag_at_if_missing(&git, "v1.0.0", "release", "merged");
-            if actual == "merged" {
-                result.unwrap();
-            } else {
-                let error = result.unwrap_err();
-                assert!(error.contains("different-commit"));
-                assert!(error.contains("not the PR merge commit merged"));
-            }
-            assert_eq!(git.calls(), ["tag_exists:v1.0.0", "tag_commit_sha:v1.0.0"]);
-        }
-    }
 
     #[test]
     fn origin_reconciliation_preserves_behind_and_diverged_local_branches() {
@@ -1343,6 +1408,42 @@ mod tests {
             "checkout:develop",
             "push:landing/source-into-main",
         ]);
+    }
+
+    #[test]
+    fn a_fresh_landing_branch_records_its_target_merge_also_when_it_changes_nothing() {
+        let mut git = MockGit::new();
+        git.ancestors.insert(("source".into(), "landing/source-into-main".into()));
+        git.ancestors.insert(("origin/main".into(), "landing/source-into-main".into()));
+
+        ensure_landing_branch(&git, "source", "main", "gflow finish").unwrap();
+
+        assert_eq!(git.calls()[2..], [
+            "remote_branch_exists:landing/source-into-main",
+            "local_branch_exists:landing/source-into-main",
+            "create_branch_no_checkout:landing/source-into-main:source",
+            "is_ancestor:source:landing/source-into-main",
+            "is_ancestor:origin/main:landing/source-into-main",
+            "current_branch",
+            "checkout:landing/source-into-main",
+            "merge_contained:origin/main:chore: merge main into landing/source-into-main",
+            "checkout:develop",
+            "push:landing/source-into-main",
+        ]);
+    }
+
+    #[test]
+    fn a_fresh_landing_branch_stops_when_its_target_merge_cannot_be_recorded() {
+        let call = "merge_contained:origin/main:chore: merge main into landing/source-into-main";
+        let mut git = MockGit::new();
+        git.ancestors.insert(("source".into(), "landing/source-into-main".into()));
+        git.ancestors.insert(("origin/main".into(), "landing/source-into-main".into()));
+        git.fail_call = Some((call.into(), 1));
+
+        let error = ensure_landing_branch(&git, "source", "main", "gflow finish").unwrap_err();
+
+        assert_eq!(error, format!("injected git failure: {call}"));
+        assert_eq!(git.calls().last().unwrap(), call);
     }
 
     #[test]

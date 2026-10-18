@@ -526,9 +526,9 @@ mod tests {
             ("release/2.5.0", Action::SyncWithDevelop,
                 "merge:release/2.5.0:chore: sync release 2.5.0 with develop"),
             ("release/2.5.0", Action::FinishRelease,
-                "create_tag:v2.5.0:chore: release 2.5.0"),
+                "create_tag_at:v2.5.0:chore: release 2.5.0:headsha"),
             ("hotfix/2.4.1", Action::FinishHotfix,
-                "create_tag:v2.4.1:chore: hotfix 2.4.1"),
+                "create_tag_at:v2.4.1:chore: hotfix 2.4.1:headsha"),
         ] {
             let mut git = MockGit::new();
             git.current_branch = branch.into();
@@ -584,9 +584,9 @@ mod tests {
     fn resumed_dispatch_uses_the_saved_version_without_syncing_the_current_branch() {
         for (action, kind, major, minor, patch, expected) in [
             (Action::FinishRelease, FinishKind::Release, 2, 5, 0,
-                "create_tag:v2.5.0:chore: release 2.5.0"),
+                "create_tag_at:v2.5.0:chore: release 2.5.0:headsha"),
             (Action::FinishHotfix, FinishKind::Hotfix, 2, 4, 7,
-                "create_tag:v2.4.7:chore: hotfix 2.4.7"),
+                "create_tag_at:v2.4.7:chore: hotfix 2.4.7:headsha"),
         ] {
             let mut git = MockGit::new();
             git.tags_on_branch = vec!["v2.5.0-rc.1".into()];

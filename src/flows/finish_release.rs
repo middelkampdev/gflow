@@ -1,14 +1,14 @@
 use std::path::Path;
 
 use crate::flows::{
-    announce_pending_landing, announce_version_pr, complete_version_pr, VersionPrCompletion, cleanup_landing_branches, delete_branches_guarded, delete_source_branch, ensure_landing_branch,
+    announce_pending_landing, complete_version_pr, open_version_pr, VersionPrCompletion, cleanup_landing_branches, delete_branches_guarded, delete_source_branch, ensure_landing_branch,
     landing_conflict_hint, finish_leg_landed, land_leg_strict, landing_pr_body, leg_landed, merge_where_checked_out, refuse_open_legacy_pr, LegState,
     merge_into, push_if_needed, push_tag_if_missing, report_commits_past_landing, require_clean_tree,
-    resume_hint, run_version_script, tag_at_if_missing, tag_if_missing, tip_landed_somewhere,
+    resume_hint, run_version_script, tag_on_mainline, tag_tip_before_landing, tip_landed_somewhere,
 };
 use crate::git::Git;
 use crate::hooks::{HookEvent, TagEvent};
-use crate::hosting::{HostingPlatform, LandedPr, PrBody};
+use crate::hosting::{HostingPlatform, LandedPr};
 use crate::repo_config::{BumpStrategy, Mode, RepoConfig};
 use crate::version::{landing_branch_name, SemVer};
 use crate::version_script::VersionScript;
@@ -112,14 +112,27 @@ pub fn bump_version(
     major: u32,
     minor: u32,
 ) -> Result<Option<TagEvent>, String> {
-    let release = SemVer::new(major, minor, 0);
-    let branch = release.release_branch();
+    cut_release_tag(git, hosting, script, cfg, &SemVer::new(major, minor, 0))
+}
 
+/// Cuts the release's next tag: the first one at the cut, every later one at a
+/// bump. Both run the same version moment. The first tag (`-rc.1`, or the
+/// clean release under patch) starts the release; any later one bumps it.
+pub(crate) fn cut_release_tag(git: &dyn Git, hosting: &dyn HostingPlatform, script: Option<&dyn VersionScript>, cfg: &RepoConfig, release: &SemVer) -> Result<Option<TagEvent>, String> {
+    let branch = release.release_branch();
+    let (major, minor) = (release.major, release.minor);
     let tagged = match cfg.mode {
-        Mode::Free => Some(bump_free(git, script, &release, &branch, major, minor, cfg.bump_strategy)?),
-        Mode::Protected => bump_protected(git, hosting, script, &release, &branch, major, minor, cfg.bump_strategy)?,
+        Mode::Free => Some(bump_free(git, script, release, &branch, major, minor, cfg.bump_strategy)?),
+        Mode::Protected => bump_protected(git, hosting, script, release, &branch, major, minor, cfg.bump_strategy)?,
     };
-    Ok(tagged.map(|tag| TagEvent::new(HookEvent::ReleaseBump, &tag, &branch)))
+    let first = match cfg.bump_strategy {
+        BumpStrategy::Rc => release.with_rc(1),
+        BumpStrategy::Patch => release.clone(),
+    };
+    Ok(tagged.map(|tag| {
+        let event = if tag == first { HookEvent::ReleaseStart } else { HookEvent::ReleaseBump };
+        TagEvent::new(event, &tag, &branch)
+    }))
 }
 
 /// Free mode: no landing PR to wait for, so a version-script commit (if there
@@ -175,52 +188,23 @@ fn bump_protected(git: &dyn Git, hosting: &dyn HostingPlatform, script: Option<&
         return cut_tag_at_tip(git, latest.as_ref(), &next, &tag).map(Some);
     };
 
-    let title = format!("chore: set version {script_version}");
-
-    if git.remote_branch_exists(&version_branch)? {
-        let url = hosting.create_or_get_pr(&version_branch, branch, &title, PrBody::NativeDefault)?;
-        announce_version_pr(hosting, &title, &url);
-        return finish_version_pr(git, hosting, &url, release, strategy, &version_branch);
-    }
-
-    require_clean_tree(git)?;
-    // A prior run can leave this branch behind locally (created, then
-    // interrupted before the script committed or pushed). It is machine-owned,
-    // so gflow clears it itself rather than dying on git's raw "branch already
-    // exists" — remote-exists is already handled by the reuse path above.
-    if git.local_branch_exists(&version_branch)? {
-        git.delete_branch_local(&version_branch)?;
-    }
-    git.create_branch(&version_branch, branch)?;
-    match run_version_script(git, script, &script_version) {
-        Ok(true) => {
-            git.push(&version_branch)?;
-            let url = hosting.create_or_get_pr(&version_branch, branch, &title, PrBody::NativeDefault)?;
-            announce_version_pr(hosting, &title, &url);
-            // Off the version branch first: a merge now deletes it.
-            git.checkout(branch)?;
-            finish_version_pr(git, hosting, &url, release, strategy, &version_branch)
-        }
-        Ok(false) => {
-            git.checkout(branch)?;
-            git.delete_branch_local(&version_branch)?;
+    match open_version_pr(git, hosting, script, branch, &script_version)? {
+        Some(url) => finish_version_pr(git, hosting, &url, release, strategy, &version_branch),
+        None => {
             let (latest, next, tag) = next_version(git, branch, major, minor, release, strategy)?;
             cut_tag_at_tip(git, latest.as_ref(), &next, &tag).map(Some)
-        }
-        Err(e) => {
-            // Best-effort: don't strand the operator on the version branch.
-            let _ = git.checkout(branch);
-            Err(e)
         }
     }
 }
 
 /// Cuts the next tag at a landed version PR's merge commit and returns it.
-/// `None` when that commit already carries the latest tag: a previous run consumed it.
+/// `None` when the latest tag already contains that commit: a previous run
+/// consumed it. Under rc the cut and every bump share one version branch, so
+/// the cut's PR stays landed for good and must not be tagged again.
 fn tag_landed_version_pr(git: &dyn Git, pr: &LandedPr, release: &SemVer, strategy: BumpStrategy, version_branch: &str) -> Result<Option<SemVer>, String> {
     let (latest, next, tag) = next_version(git, &release.release_branch(), release.major, release.minor, release, strategy)?;
     let consumed = match &latest {
-        Some(l) => git.tag_commit_sha(&l.tag_name())? == pr.merge_commit_sha,
+        Some(l) => git.is_ancestor(&pr.merge_commit_sha, &l.tag_name())?,
         None => false,
     };
     if consumed {
@@ -316,12 +300,20 @@ pub fn finish_release(
     // Merge into the mainline — inline rather than merge_into(): the staging
     // gate must run inside the not-yet-merged branch, so a resume past that
     // merge never re-evaluates it.
-    if !git.is_ancestor(&release_branch, main_branch)? {
+    let merged = git.is_ancestor(&release_branch, main_branch)?;
+    if !merged {
         let latest_staged_tag = latest_staged.tag_name();
         let commits_past = git.rev_list_count(&latest_staged_tag, &release_branch)?;
         if commits_past > 0 {
             return Err(past_staged_tag_error(&release_branch, main_branch, &latest_staged_tag, commits_past, cfg.bump_strategy));
         }
+    }
+    // Patch strategy: the final tag is the last bump tag, already cut on the
+    // release branch — nothing to tag at finish.
+    if cfg.bump_strategy == BumpStrategy::Rc {
+        tag_tip_before_landing(git, &tag, &format!("chore: release {release_version}"), &release_branch, main_branch)?;
+    }
+    if !merged {
         println!("Merging into {main_branch}...");
         merge_where_checked_out(git, &release_branch, main_branch, &format!("chore: merge release {release} into {main_branch}"))
             .map_err(|e| format!("{e}\n{}", resume_hint(&release_branch)))?;
@@ -329,15 +321,13 @@ pub fn finish_release(
         println!("↷ skipped: merge into {main_branch} (already merged)");
     }
 
-    // Patch strategy: the final tag is the last bump tag, already cut on the
-    // release branch — nothing to tag at finish. The push stays in both
-    // strategies: a bump's push_tag can have failed, and this is the last
-    // moment the missing production tag gets caught before the branch goes.
-    if cfg.bump_strategy == BumpStrategy::Rc {
-        tag_if_missing(git, &tag, &format!("chore: release {release_version}"))?;
-    }
     push_if_needed(git, main_branch)?;
-    push_tag_if_missing(git, &tag)?;
+    // Patch: a bump's push_tag can have failed, and this is the last moment
+    // the missing production tag gets caught before the branch goes. Under rc
+    // the finish pushed its own tag above.
+    if cfg.bump_strategy == BumpStrategy::Patch {
+        push_tag_if_missing(git, &tag)?;
+    }
 
     merge_into(git, &release_branch, "develop",
         &format!("chore: merge release {release} into develop"),
@@ -386,11 +376,8 @@ fn staging_gate(git: &dyn Git, release_branch: &str, main_branch: &str, major: u
 /// SKILL.md, "Landing modes"), so each landing step opens a PR and stops for a
 /// human to merge; the next run picks up from wherever `leg_landed` finds it
 /// landed.
-/// The tag is checked for mainline containment *before* consulting the main
-/// leg's current PR lookup — once a re-opened main PR has merged, that lookup
-/// returns the new PR, whose merge commit is not what an already-cut tag
-/// points at, and comparing against it would wrongly call a landed release
-/// unlanded.
+/// Under rc the clean tag goes on the release tip, the tested build, before
+/// the main landing opens.
 #[allow(clippy::too_many_arguments)]
 fn finish_release_protected(git: &dyn Git, hosting: &dyn HostingPlatform, cfg: &RepoConfig, major: u32, minor: u32, main_branch: &str, template: Option<&Path>, accept_merge_type: bool) -> Result<Option<TagEvent>, String> {
     let release = SemVer::new(major, minor, 0);
@@ -411,31 +398,18 @@ fn finish_release_protected(git: &dyn Git, hosting: &dyn HostingPlatform, cfg: &
     match cfg.bump_strategy {
         BumpStrategy::Rc => {
             let tag = release.tag_name();
-            let tag_landed = git.tag_exists(&tag)?
-                && git.is_ancestor(&git.tag_commit_sha(&tag)?, &format!("origin/{main_branch}"))?;
-
-            if tag_landed {
-                // Landed and tagged on an earlier run. Still push: the tag can exist
-                // locally and never have reached origin if a previous run stopped in
-                // between.
-                push_tag_if_missing(git, &tag)?;
-            } else {
-                match &main_pr {
-                    Some(pr) => {
-                        tag_at_if_missing(git, &tag, &format!("chore: release {release}"), &pr.merge_commit_sha)?;
-                        push_tag_if_missing(git, &tag)?;
-                    }
-                    None => {
-                        staging_gate(git, &release_branch, main_branch, major, minor, cfg.bump_strategy)?;
-                        let title = format!("chore: merge release {release} into {main_branch}");
-                        let landing = ensure_landing_branch(git, &release_branch, main_branch, "gflow finish")?;
-                        let url = hosting.create_or_get_pr(&landing, main_branch, &title, landing_pr_body(template))?;
-                        announce_pending_landing(hosting, &title, &url, "gflow finish", &landing_conflict_hint(&landing, main_branch));
-                        return Ok(None);
-                    }
-                }
+            let main_landed = main_pr.is_some() || tag_on_mainline(git, &tag, main_branch)?;
+            if !main_landed {
+                staging_gate(git, &release_branch, main_branch, major, minor, cfg.bump_strategy)?;
             }
-
+            tag_tip_before_landing(git, &tag, &format!("chore: release {release}"), &release_branch, main_branch)?;
+            if !main_landed {
+                let title = format!("chore: merge release {release} into {main_branch}");
+                let landing = ensure_landing_branch(git, &release_branch, main_branch, "gflow finish")?;
+                let url = hosting.create_or_get_pr(&landing, main_branch, &title, landing_pr_body(template))?;
+                announce_pending_landing(hosting, &title, &url, "gflow finish", &landing_conflict_hint(&landing, main_branch));
+                return Ok(None);
+            }
             if let Some(pr) = &main_pr {
                 report_commits_past_landing(git, &release_branch, pr, main_branch, &tag)?;
             }

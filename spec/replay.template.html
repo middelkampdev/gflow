@@ -169,7 +169,7 @@ svg text { font-family: var(--mono); }
     </div>
   </section>
 
-  <div class="note"><p><b>This page is the spec.</b> It is rendered from <code>spec/cycles/*.json</code>, one file per settings combination, by <code>python3 spec/render.py</code>. Edit the JSON, then render. It is the agreed target: gflow does not follow it yet. gflow still bumps develop at the release cut, commits the cut and hotfix versions directly, waits for platform auto-complete on version PRs, tags the final release and hotfix on main, skips the target merge into a landing branch when it changes nothing, lands a hotfix on develop before the open releases, and has no deploy-version command. Commit messages for merges are shortened. With landing branches hidden, a landing PR merge is drawn from the source commit that the landing branch carries.</p><ul id="rules"></ul></div>
+  <div class="note"><p><b>This page is the spec.</b> It is rendered from <code>spec/cycles/*.json</code>, one file per settings combination, by <code>python3 spec/render.py</code>. Edit the JSON, then render. gflow follows it in every combination.</p><ul id="rules"></ul></div>
 </div>
 
 <script type="application/json" id="cycles">{{CYCLES_JSON}}</script>

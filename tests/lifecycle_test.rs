@@ -394,6 +394,7 @@ fn resume_runs_flow_from_state_and_clears_it_on_success() {
     git.ancestors.insert(("release/2.5.0".to_string(), "develop".to_string()));
     git.existing_tags.insert("v2.5.0".to_string());
     git.existing_remote_tags.insert("v2.5.0".to_string());
+    git.tag_commits.insert("v2.5.0".to_string(), "headsha".to_string());
     git.pushed_branches.insert("main".to_string());
     git.pushed_branches.insert("develop".to_string());
     FinishState {
@@ -689,6 +690,7 @@ fn hotfix_resume_takes_its_version_from_state_not_the_branch() {
     git.ancestors.insert(("hotfix/2.5.1".to_string(), "develop".to_string()));
     git.existing_tags.insert("v2.5.1".to_string());
     git.existing_remote_tags.insert("v2.5.1".to_string());
+    git.tag_commits.insert("v2.5.1".to_string(), "headsha".to_string());
     git.pushed_branches.insert("main".to_string());
     git.pushed_branches.insert("develop".to_string());
     FinishState {
@@ -857,6 +859,7 @@ fn a_stash_that_vanished_before_the_pop_is_not_an_error() {
     git.ancestors.insert(("release/2.5.0".to_string(), "develop".to_string()));
     git.existing_tags.insert("v2.5.0".to_string());
     git.existing_remote_tags.insert("v2.5.0".to_string());
+    git.tag_commits.insert("v2.5.0".to_string(), "headsha".to_string());
     git.pushed_branches.insert("main".to_string());
     git.pushed_branches.insert("develop".to_string());
     FinishState {

@@ -338,3 +338,17 @@ fn fix_commands_reject_invalid_names_before_starting() {
         assert_eq!(error, "Name cannot be empty");
     }
 }
+
+#[test]
+#[should_panic(expected = "deploy-version is dispatched in main()")]
+fn branch_dispatch_rejects_deploy_version() {
+    let _ = resolve_action(Commands::DeployVersion { name: false, build: false }, &BranchType::Develop, false, "main");
+}
+
+#[test]
+fn deploy_version_parses_with_at_most_one_part() {
+    assert!(matches!(parse(&["deploy-version"]).unwrap(), Commands::DeployVersion { name: false, build: false }));
+    assert!(matches!(parse(&["deploy-version", "--name"]).unwrap(), Commands::DeployVersion { name: true, build: false }));
+    assert!(matches!(parse(&["deploy-version", "--build"]).unwrap(), Commands::DeployVersion { name: false, build: true }));
+    assert!(parse(&["deploy-version", "--name", "--build"]).is_err());
+}

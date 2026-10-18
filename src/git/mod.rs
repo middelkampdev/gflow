@@ -62,6 +62,12 @@ pub trait Git {
     fn push_tag(&self, tag: &str) -> Result<bool>;
     fn create_tag(&self, tag: &str, message: &str) -> Result<()>;
     fn merge(&self, branch: &str, message: &str) -> Result<()>;
+    /// The commits on `rev`'s first-parent line, newest first.
+    fn first_parent_commits(&self, rev: &str) -> Result<Vec<String>>;
+    /// A merge commit with `rev` on the current branch when the branch already
+    /// contains `rev`, where `merge --no-ff` would make none: the tree stays the
+    /// same, and the history shows that `rev` was merged in.
+    fn merge_contained(&self, rev: &str, message: &str) -> Result<()>;
     fn ff_merge(&self, branch: &str) -> Result<()>;
     fn list_tags(&self) -> Result<Vec<String>>;
     /// Contract: returns a sorted, deduplicated list — consumers pick
@@ -351,9 +357,16 @@ impl Git for GitCli<'_> {
     }
     fn create_tag(&self, tag: &str, message: &str) -> Result<()> { self.run(&["tag", "-a", tag, "-m", message]).map(|_| ()) }
     fn merge(&self, branch: &str, message: &str) -> Result<()> { self.run(&["merge", branch, "--no-ff", "-m", message]).map(|_| ()) }
+    fn merge_contained(&self, rev: &str, message: &str) -> Result<()> {
+        let commit = self.run(&["commit-tree", "HEAD^{tree}", "-p", "HEAD", "-p", rev, "-m", message])?;
+        self.ff_merge(commit.trim())
+    }
     fn ff_merge(&self, branch: &str) -> Result<()> { self.run(&["merge", branch, "--ff-only"]).map(|_| ()) }
     fn list_tags(&self) -> Result<Vec<String>> {
         self.run_lines(&["tag", "--list"])
+    }
+    fn first_parent_commits(&self, rev: &str) -> Result<Vec<String>> {
+        self.run_lines(&["rev-list", "--first-parent", rev])
     }
     fn list_branches_matching(&self, pattern: &str) -> Result<Vec<String>> {
         let ref_pattern = format!("refs/remotes/origin/{pattern}");

@@ -3,8 +3,8 @@ use std::path::Path;
 use crate::flows::{
     announce_pending_landing, cleanup_landing_branches, delete_source_branch, ensure_landing_branch,
     landing_conflict_hint, finish_leg_landed, land_leg_strict, landing_pr_body, merge_into, refuse_open_legacy_pr, LegState,
-    open_versioned_branches, push_if_needed, push_tag_if_missing, report_commits_past_landing, resume_hint, tag_at_if_missing,
-    tag_if_missing, tip_landed_somewhere,
+    open_versioned_branches, push_if_needed, report_commits_past_landing, resume_hint, tag_on_mainline, tag_tip_before_landing,
+    tip_landed_somewhere,
 };
 use crate::git::Git;
 use crate::hooks::{HookEvent, TagEvent};
@@ -34,17 +34,12 @@ pub fn finish_hotfix(
 
     println!("Finishing hotfix {hotfix_branch}...");
 
+    tag_tip_before_landing(git, &tag, &format!("chore: hotfix {version}"), &hotfix_branch, main_branch)?;
+
     merge_into(git, &hotfix_branch, main_branch,
         &format!("chore: merge hotfix {version} into {main_branch}"),
         &resume_hint(&hotfix_branch))?;
-    tag_if_missing(git, &tag, &format!("chore: hotfix {version}"))?;
     push_if_needed(git, main_branch)?;
-    push_tag_if_missing(git, &tag)?;
-
-    merge_into(git, &hotfix_branch, "develop",
-        &format!("chore: merge hotfix {version} into develop"),
-        &resume_hint(&hotfix_branch))?;
-    push_if_needed(git, "develop")?;
 
     // `release/*` cannot match `release-fix/*`, so no extra filtering is needed
     // for that; `open_versioned_branches` also drops any release already shipped.
@@ -57,7 +52,7 @@ pub fn finish_hotfix(
         merge_into(git, &hotfix_branch, release,
             &format!("chore: merge hotfix {version} into {release}"),
             &format!(
-                "Hotfix {version} was merged into {main_branch} and develop, but propagation into {release} failed.\n\
+                "Hotfix {version} was merged into {main_branch}, but propagation into {release} failed.\n\
                  {}\n\
                  (After all releases are updated, run 'gflow bump' on each to cut a fresh RC for staging.)",
                 resume_hint(&hotfix_branch)
@@ -66,6 +61,11 @@ pub fn finish_hotfix(
         // still push on resume (see decisions.md).
         push_if_needed(git, release)?;
     }
+
+    merge_into(git, &hotfix_branch, "develop",
+        &format!("chore: merge hotfix {version} into develop"),
+        &resume_hint(&hotfix_branch))?;
+    push_if_needed(git, "develop")?;
 
     finish_hotfix_cleanup(git, cfg, &hotfix_branch, main_branch, &version, &release_branches, true)?;
     Ok(Some(TagEvent::new(HookEvent::HotfixFinish, &version, &hotfix_branch)))
@@ -92,7 +92,7 @@ pub fn finish_hotfix_cleanup(git: &dyn Git, cfg: &RepoConfig, hotfix_branch: &st
         println!("✔ Hotfix {version} complete.");
     } else {
         let list = release_branches.join(", ");
-        println!("✔ Hotfix {version} propagated to: {main_branch}, develop, {list}");
+        println!("✔ Hotfix {version} propagated to: {main_branch}, {list}, develop");
         println!("Run 'gflow bump' on each release branch to cut a new RC.");
     }
     Ok(())
@@ -100,10 +100,9 @@ pub fn finish_hotfix_cleanup(git: &dyn Git, cfg: &RepoConfig, hotfix_branch: &st
 
 /// Protected mode: hotfixes carry no RC gate (unlike releases, `finish_release.rs`),
 /// so a landing step opens straight into the same sequential PR-per-run shape —
-/// main, then develop, then each open release branch in sorted order, one PR per
-/// run, stopping at the first still-pending target. The tag is checked for
-/// mainline containment *before* consulting the main leg's current PR lookup —
-/// see `finish_release_protected` for why.
+/// main, then each open release branch in sorted order, then develop, one PR
+/// per run, stopping at the first still-pending target. The tag goes on the
+/// hotfix tip before the main landing opens.
 #[allow(clippy::too_many_arguments)]
 fn finish_hotfix_protected(git: &dyn Git, hosting: &dyn HostingPlatform, cfg: &RepoConfig, major: u32, minor: u32, patch: u32, main_branch: &str, template: Option<&Path>, accept_merge_type: bool) -> Result<Option<TagEvent>, String> {
     let version = SemVer::new(major, minor, patch);
@@ -118,52 +117,31 @@ fn finish_hotfix_protected(git: &dyn Git, hosting: &dyn HostingPlatform, cfg: &R
         landed.push(pr.clone());
     }
 
-    let tag_landed = git.tag_exists(&tag)?
-        && git.is_ancestor(&git.tag_commit_sha(&tag)?, &format!("origin/{main_branch}"))?;
-
-    if tag_landed {
-        push_tag_if_missing(git, &tag)?;
-    } else {
-        match &main_pr {
-            Some(pr) => {
-                tag_at_if_missing(git, &tag, &format!("chore: hotfix {version}"), &pr.merge_commit_sha)?;
-                push_tag_if_missing(git, &tag)?;
-            }
-            None => {
-                let title = format!("chore: merge hotfix {version} into {main_branch}");
-                let landing = ensure_landing_branch(git, &hotfix_branch, main_branch, "gflow finish")?;
-                let url = hosting.create_or_get_pr(&landing, main_branch, &title, landing_pr_body(template))?;
-                announce_pending_landing(hosting, &title, &url, "gflow finish", &landing_conflict_hint(&landing, main_branch));
-                return Ok(None);
-            }
-        }
+    let main_landed = main_pr.is_some() || tag_on_mainline(git, &tag, main_branch)?;
+    tag_tip_before_landing(git, &tag, &format!("chore: hotfix {version}"), &hotfix_branch, main_branch)?;
+    if !main_landed {
+        let title = format!("chore: merge hotfix {version} into {main_branch}");
+        let landing = ensure_landing_branch(git, &hotfix_branch, main_branch, "gflow finish")?;
+        let url = hosting.create_or_get_pr(&landing, main_branch, &title, landing_pr_body(template))?;
+        announce_pending_landing(hosting, &title, &url, "gflow finish", &landing_conflict_hint(&landing, main_branch));
+        return Ok(None);
     }
-
     if let Some(pr) = &main_pr {
         report_commits_past_landing(git, &hotfix_branch, pr, main_branch, &tag)?;
     }
 
     let mut content_landed = false;
-    let title = format!("chore: merge hotfix {version} into develop");
-    match land_leg_strict(git, hosting, &hotfix_branch, "develop", &title, template, "gflow finish", accept_merge_type)? {
-        LegState::Landed(pr) => landed.push(pr),
-        LegState::ContentPresent => content_landed = true,
-        LegState::Pending { url, landing } => {
-            announce_pending_landing(hosting, &title, &url, "gflow finish", &landing_conflict_hint(&landing, "develop"));
-            return Ok(None);
-        }
-    }
-
     let mut release_branches = open_versioned_branches(git, hosting, cfg, main_branch, "release")?;
     release_branches.sort();
+    let targets = release_branches.iter().map(String::as_str).chain(["develop"]);
 
-    for release in &release_branches {
-        let title = format!("chore: merge hotfix {version} into {release}");
-        match land_leg_strict(git, hosting, &hotfix_branch, release, &title, template, "gflow finish", accept_merge_type)? {
+    for target in targets {
+        let title = format!("chore: merge hotfix {version} into {target}");
+        match land_leg_strict(git, hosting, &hotfix_branch, target, &title, template, "gflow finish", accept_merge_type)? {
             LegState::Landed(pr) => landed.push(pr),
             LegState::ContentPresent => content_landed = true,
             LegState::Pending { url, landing } => {
-                announce_pending_landing(hosting, &title, &url, "gflow finish", &landing_conflict_hint(&landing, release));
+                announce_pending_landing(hosting, &title, &url, "gflow finish", &landing_conflict_hint(&landing, target));
                 return Ok(None);
             }
         }

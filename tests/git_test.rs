@@ -517,6 +517,8 @@ fn every_primitive_issues_its_documented_git_command() {
         // --ff-only is the opposite intent: sync, never invent a merge commit.
         ("git merge origin/develop --ff-only", Box::new(|g| { g.ff_merge("origin/develop").ok(); })),
         ("git tag --list", Box::new(|g| { g.list_tags().ok(); })),
+        // --first-parent: a merged PR counts as one commit of the branch.
+        ("git rev-list --first-parent HEAD", Box::new(|g| { g.first_parent_commits("HEAD").ok(); })),
         ("git tag --merged release/2.5.0", Box::new(|g| { g.tags_on_branch("release/2.5.0").ok(); })),
         // -D force-deletes: gflow only calls this once the branch is verifiably merged.
         ("git branch -D feature/x", Box::new(|g| { g.delete_branch_local("feature/x").ok(); })),
@@ -743,4 +745,26 @@ fn malformed_short_status_rows_do_not_hide_later_conflicts() {
         let runner = MockCommandRunner::ok(status);
         assert_eq!(GitCli::new(&runner).has_unmerged_paths().unwrap(), expected);
     }
+}
+
+#[test]
+fn merge_contained_records_a_merge_with_a_target_the_branch_already_contains() {
+    // `merge --no-ff` says "Already up to date" and makes no commit when the
+    // target is an ancestor, so the merge commit is written by hand.
+    let runner = MockCommandRunner::scripted(&[(0, "abc123\n", ""), (0, "", "")]);
+
+    git(&runner).merge_contained("origin/main", "chore: merge main into landing/x").unwrap();
+
+    assert_eq!(runner.calls(), vec![
+        "git commit-tree HEAD^{tree} -p HEAD -p origin/main -m chore: merge main into landing/x",
+        "git merge abc123 --ff-only",
+    ]);
+}
+
+#[test]
+fn merge_contained_stops_when_the_merge_commit_cannot_be_written() {
+    let runner = MockCommandRunner::scripted(&[(128, "", "fatal: not a valid object name")]);
+
+    assert!(git(&runner).merge_contained("origin/main", "chore: merge").is_err());
+    assert_eq!(runner.calls().len(), 1);
 }

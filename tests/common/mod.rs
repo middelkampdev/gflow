@@ -115,6 +115,8 @@ pub struct MockGit {
     /// SHA each branch's tip resolves to via `branch_sha`. A branch missing
     /// here falls back to `head_sha`.
     pub branch_shas: HashMap<String, String>,
+    /// Each rev's first-parent line for `first_parent_commits` (defaults to none).
+    pub first_parents: HashMap<String, Vec<String>>,
     /// Scripted `is_working_tree_clean` answers, consumed front-first. Empty
     /// (the default) falls back to `working_tree_clean`.
     pub working_tree_clean_seq: RefCell<VecDeque<bool>>,
@@ -171,6 +173,7 @@ impl MockGit {
             worktrees: HashMap::new(),
             tag_commits: HashMap::new(),
             branch_shas: HashMap::new(),
+            first_parents: HashMap::new(),
             working_tree_clean_seq: RefCell::new(VecDeque::new()),
             _git_dir_guard: None,
         }
@@ -261,6 +264,15 @@ impl Git for MockGit {
     fn create_tag(&self, tag: &str, message: &str) -> Result<(), String> {
         self.record(format!("create_tag:{tag}:{message}"))?;
         Ok(())
+    }
+
+    fn first_parent_commits(&self, rev: &str) -> Result<Vec<String>, String> {
+        self.record(format!("first_parent_commits:{rev}"))?;
+        Ok(self.first_parents.get(rev).cloned().unwrap_or_default())
+    }
+
+    fn merge_contained(&self, rev: &str, message: &str) -> Result<(), String> {
+        self.record(format!("merge_contained:{rev}:{message}"))
     }
 
     fn merge(&self, branch: &str, message: &str) -> Result<(), String> {

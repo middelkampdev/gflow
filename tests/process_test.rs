@@ -71,15 +71,17 @@ case "$*" in
             printf 'not a repository\n' >&2
             exit 128
         fi
-        printf 'feature/coverage\n'
+        printf '%s\n' "${GFLOW_BRANCH:-feature/coverage}"
         ;;
     'rev-parse --git-dir') printf '%s/repo/.git\n' "$GFLOW_FIXTURE" ;;
     'worktree list --porcelain') printf 'worktree %s/main\n' "$GFLOW_FIXTURE" ;;
-    'config --get gflow.branch.main') printf 'main\n' ;;
+    'config --get gflow.branch.main') printf '%s\n' "${GFLOW_MAINLINE:-main}" ;;
     'config --get gflow.hosting.provider')
         if [ -n "$GFLOW_PROVIDER" ]; then printf '%s\n' "$GFLOW_PROVIDER"; else exit 1; fi
         ;;
     'remote get-url origin') printf '%s\n' "${GFLOW_REMOTE:-https://github.com/example/fixture.git}" ;;
+    'tag --list') ;;
+    'rev-list --first-parent HEAD') printf 'c1\nc0\n' ;;
     'config --global --get-regexp '*|'config --local --get-regexp '*) exit 1 ;;
     *) printf 'unexpected git call: %s\n' "$*" >&2; exit 97 ;;
 esac
@@ -619,5 +621,30 @@ fn process_adapter_child() {
         );
     } else {
         assert_eq!(copied.unwrap_err(), "no clipboard tool available");
+    }
+}
+
+#[test]
+fn deploy_version_prints_without_configuration_or_hosting() {
+    let fixture = ProcessFixture::new();
+    fixture.git();
+    let output = fixture.run_gflow(&["deploy-version"]);
+    assert_success(&output);
+    assert_eq!(stdout(&output), "0.1.0+2\n");
+    let calls = fs::read_to_string(fixture.root.join("git-calls")).unwrap();
+    assert!(!calls.contains("remote get-url"), "{calls}");
+}
+
+#[test]
+fn deploy_version_reports_a_refused_branch_or_mainline() {
+    for (variable, value, error) in [
+        ("GFLOW_BRANCH", "main", "not on main."),
+        ("GFLOW_MAINLINE", "trunk", "Unsupported mainline branch 'trunk'"),
+    ] {
+        let fixture = ProcessFixture::new();
+        fixture.git();
+        let output = fixture.command(env!("CARGO_BIN_EXE_gflow")).env(variable, value).arg("deploy-version").output().unwrap();
+        assert!(!output.status.success());
+        assert!(stderr(&output).contains(error), "{}", stderr(&output));
     }
 }
