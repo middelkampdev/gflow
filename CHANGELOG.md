@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--no-hooks` on `gflow start release`, `gflow bump` and `gflow finish` skips the hook commands of that run and prints each one as a rerun command.
 - When a hook command fails, the release or hotfix stays done. gflow prints the exit code and the exact rerun command, and exits non-zero.
 
+### Fixed
+- Protected mode: `gflow finish` on a release or hotfix no longer completes while its later commits miss `develop` (or an open release). When a landing into that branch had merged before the source gained commits, gflow refreshes the landing branch. If that refresh hit a conflict, the re-run after you resolved it deleted the branches and printed "complete" without pushing the resolution or opening the fresh PR. The same happened on a re-run while the fresh PR was still open. gflow now treats a leg as landed only when the merged PR itself contains the source tip, so it pushes the refreshed landing branch, opens the fresh PR and waits for it.
+
 ## [5.1.0] - 2026-10-13
 
 ### Changed

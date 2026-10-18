@@ -899,9 +899,10 @@ fn protected_hotfix_all_legs_use_landing_branches() {
 #[test]
 fn protected_hotfix_completes_after_conflict_resolutions_and_cleans_every_landing_branch() {
     // Both legs' PRs carry conflict-resolution commits: their heads no longer
-    // equal the hotfix tip, and containment is proven via origin/landing
-    // ancestry. Cleanup must still delete the source — and every landing/*
-    // branch, including an orphan for a release that shipped mid-finish.
+    // equal the hotfix tip but descend from it, and the cleanup guard proves
+    // containment via origin/landing ancestry. Cleanup must still delete the
+    // source — and every landing/* branch, including an orphan for a release
+    // that shipped mid-finish.
     let mut git = MockGit::new();
     git.current_branch = "hotfix/1.1.1".to_string();
     git.branch_shas.insert("hotfix/1.1.1".to_string(), "hfsha".to_string());
@@ -916,6 +917,7 @@ fn protected_hotfix_completes_after_conflict_resolutions_and_cleans_every_landin
     git.ancestors.insert(("mc2".to_string(), "origin/develop".to_string()));
     git.ancestors.insert(("hotfix/1.1.1".to_string(), "origin/landing/hotfix-1.1.1-into-main".to_string()));
     git.ancestors.insert(("hotfix/1.1.1".to_string(), "origin/landing/hotfix-1.1.1-into-develop".to_string()));
+    git.ancestors.insert(("hotfix/1.1.1".to_string(), "res-dev".to_string()));
     git.branches_matching_by.insert("release/*".to_string(), vec![]);
     git.branches_matching_by.insert("landing/hotfix-1.1.1-into-*".to_string(), vec![
         "landing/hotfix-1.1.1-into-develop".to_string(),
@@ -948,8 +950,8 @@ fn protected_hotfix_completes_after_conflict_resolutions_and_cleans_every_landin
 #[test]
 fn protected_hotfix_falls_back_to_local_landing_refs_when_origin_pruned_them() {
     // The platform auto-deleted the merged landing branches and fetch --prune
-    // removed origin/landing/*; only the local refs still prove the resolved
-    // landings contain the tip.
+    // removed origin/landing/*; only the local refs still prove to the cleanup
+    // guard that the resolved landings contain the tip.
     let mut git = MockGit::new();
     git.current_branch = "hotfix/1.1.1".to_string();
     git.branch_shas.insert("hotfix/1.1.1".to_string(), "hfsha".to_string());
@@ -962,6 +964,7 @@ fn protected_hotfix_falls_back_to_local_landing_refs_when_origin_pruned_them() {
     git.ancestors.insert(("mc1".to_string(), "origin/main".to_string()));
     git.ancestors.insert(("mc2".to_string(), "origin/develop".to_string()));
     git.ancestors.insert(("hotfix/1.1.1".to_string(), "landing/hotfix-1.1.1-into-develop".to_string()));
+    git.ancestors.insert(("hotfix/1.1.1".to_string(), "res-dev".to_string()));
     git.branches_matching_by.insert("release/*".to_string(), vec![]);
     git.branches_matching_by.insert("landing/hotfix-1.1.1-into-*".to_string(), vec![
         "landing/hotfix-1.1.1-into-develop".to_string(),

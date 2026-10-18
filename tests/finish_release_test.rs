@@ -1709,6 +1709,61 @@ fn develop_leg_reopens_when_release_gained_commits_after_a_landed_sync() {
 }
 
 #[test]
+fn a_refreshed_landing_branch_is_not_mistaken_for_the_stale_merged_landing() {
+    // The develop landing merged before the release gained commits. The refresh
+    // then either stopped on a conflict the developer resolved locally, or was
+    // pushed with its fresh PR still open. Either way the landing branch holds
+    // the tip, but no merged PR does — the finish must wait for the fresh PR.
+    for refresh in ["resolved-locally", "pushed-awaiting-review"] {
+        let mut git = MockGit::new();
+        git.existing_tags.insert("v1.1.0".to_string());
+        git.tag_commits.insert("v1.1.0".to_string(), "mc1".to_string());
+        git.existing_remote_tags.insert("v1.1.0".to_string());
+        git.ancestors.insert(("mc1".to_string(), "origin/main".to_string()));
+        git.branch_shas.insert("release/1.1.0".to_string(), "newsha".to_string());
+        git.existing_local_branches.insert("release/1.1.0".to_string());
+        git.existing_remote_branches.insert("release/1.1.0".to_string());
+        git.pushed_branches.insert("release/1.1.0".to_string());
+        git.existing_remote_branches.insert("landing/release-1.1.0-into-develop".to_string());
+        git.ancestors.insert(("mc2".to_string(), "origin/develop".to_string()));
+        git.parent_counts.insert("mc2".to_string(), 2);
+        match refresh {
+            "resolved-locally" => {
+                git.existing_local_branches.insert("landing/release-1.1.0-into-develop".to_string());
+                git.ancestors.insert(("release/1.1.0".to_string(), "landing/release-1.1.0-into-develop".to_string()));
+                git.ancestors.insert(("origin/landing/release-1.1.0-into-develop".to_string(), "landing/release-1.1.0-into-develop".to_string()));
+                git.ancestors.insert(("origin/develop".to_string(), "landing/release-1.1.0-into-develop".to_string()));
+            }
+            _ => {
+                git.ancestors.insert(("release/1.1.0".to_string(), "origin/landing/release-1.1.0-into-develop".to_string()));
+                git.ancestors.insert(("origin/develop".to_string(), "origin/landing/release-1.1.0-into-develop".to_string()));
+            }
+        }
+        let mut hosting = MockHosting::new();
+        hosting.merged_prs_to.insert(
+            ("landing/release-1.1.0-into-develop".to_string(), "develop".to_string()),
+            landed("oldsha", "mc2"),
+        );
+
+        finish_release(&git, &hosting, &protected_cfg(false), 1, 1, "main", None, false).unwrap();
+
+        let calls = git.calls();
+        assert!(!calls.iter().any(|c| c.starts_with("delete_branch")),
+            "{refresh}: the finish must NOT complete before the fresh PR merges; calls: {calls:?}");
+        if refresh == "resolved-locally" {
+            assert!(calls.contains(&"push:landing/release-1.1.0-into-develop".to_string()),
+                "{refresh}: the resolution must be pushed; calls: {calls:?}");
+        }
+        let hosting_calls = hosting.calls();
+        assert_eq!(hosting_calls[hosting_calls.len() - 3..], [
+            "create_or_get_pr:landing/release-1.1.0-into-develop:develop:chore: merge release 1.1.0 into develop:empty-body".to_string(),
+            "copy_text:chore: merge release 1.1.0 into develop\nhttps://github.com/org/repo/pull/1".to_string(),
+            "open_url:https://github.com/org/repo/pull/1".to_string(),
+        ], "{refresh}");
+    }
+}
+
+#[test]
 fn ensure_reuses_a_remote_landing_branch_that_gained_resolution_commits() {
     let mut git = MockGit::new();
     git.existing_tags.insert("v1.1.0".to_string());
