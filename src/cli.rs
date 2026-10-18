@@ -31,15 +31,31 @@ pub enum Commands {
         /// commit) and continue instead of stopping with undo instructions.
         #[arg(long)]
         accept_merge_type: bool,
+        /// Skip the repo's hook commands for this run (they are listed, not run)
+        #[arg(long, conflicts_with = "abort")]
+        no_hooks: bool,
     },
     /// Bump the patch version on the current release branch
-    Bump,
+    Bump {
+        /// Skip the repo's hook commands for this run (they are listed, not run)
+        #[arg(long)]
+        no_hooks: bool,
+    },
     /// Sync the current release branch into develop
     Sync {
         /// Accept a landing PR that was completed with the wrong type (squash
         /// instead of merge commit) and continue.
         #[arg(long)]
         accept_merge_type: bool,
+    },
+    /// Print the version of a deploy build from this branch (X.Y.Z+N), for build scripts
+    DeployVersion {
+        /// Print only the version name (X.Y.Z)
+        #[arg(long, conflicts_with = "build")]
+        name: bool,
+        /// Print only the build number (N)
+        #[arg(long)]
+        build: bool,
     },
     /// Initialise this repository for gflow: writes .gflow/config (interactive)
     Init,
@@ -142,6 +158,9 @@ pub enum StartKind {
         /// Skip the worktree flow for this command (no effect unless gflow.worktree.enabled)
         #[arg(long)]
         no_worktree: bool,
+        /// Skip the repo's hook commands for this run (they are listed, not run)
+        #[arg(long)]
+        no_hooks: bool,
     },
     /// Start a release fix branch (must be on a release branch)
     ReleaseFix {
@@ -192,7 +211,7 @@ pub fn resolve_action(command: Commands, branch_type: &BranchType, worktree_enab
             StartKind::Chore { name, base, opts } => start_work_branch("chore", name, base, opts.no_checkout, opts.no_worktree),
             StartKind::Docs { name, base, opts } => start_work_branch("docs", name, base, opts.no_checkout, opts.no_worktree),
             StartKind::Refactor { name, base, opts } => start_work_branch("refactor", name, base, opts.no_checkout, opts.no_worktree),
-            StartKind::Release { major, minor, no_worktree } => {
+            StartKind::Release { major, minor, no_worktree, .. } => {
                 let release_type = if major { Some(ReleaseType::Major) }
                     else if minor { Some(ReleaseType::Minor) }
                     else { None };
@@ -232,7 +251,6 @@ pub fn resolve_action(command: Commands, branch_type: &BranchType, worktree_enab
                 }
                 BranchType::Release { .. } => Ok(Action::FinishRelease),
                 BranchType::ReleaseFix { .. } => Ok(Action::FinishReleaseFix),
-                BranchType::ReleaseChore { .. } => Ok(Action::FinishReleaseChore),
                 BranchType::Hotfix { .. } => Ok(Action::FinishHotfix),
                 BranchType::HotfixFix { .. } => Ok(Action::FinishHotfixFix),
                 BranchType::Other => {
@@ -240,7 +258,7 @@ pub fn resolve_action(command: Commands, branch_type: &BranchType, worktree_enab
                 }
             }
         }
-        Commands::Bump => {
+        Commands::Bump { .. } => {
             require_release_branch(branch_type)?;
             Ok(Action::BumpVersion)
         }
@@ -253,6 +271,9 @@ pub fn resolve_action(command: Commands, branch_type: &BranchType, worktree_enab
         }
         Commands::Init => {
             unreachable!("init is dispatched in main() before resolve_action")
+        }
+        Commands::DeployVersion { .. } => {
+            unreachable!("deploy-version is dispatched in main() before resolve_action")
         }
     }
 }

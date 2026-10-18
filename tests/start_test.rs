@@ -7,6 +7,11 @@ use gflow::repo_config::{BumpStrategy, Mode, RepoConfig};
 use gflow::version::SemVer;
 use gflow::worktree::{WorktreeConfig, WorktreeContext, WorktreeEnv};
 use common::MockWorktreeSetup;
+use gflow::hooks::{HookEvent, TagEvent};
+
+fn started(tag: &str) -> Option<TagEvent> {
+    Some(TagEvent::new(HookEvent::ReleaseStart, &SemVer::parse(tag).unwrap(), "release/1.1.0"))
+}
 
 fn patch_cfg() -> RepoConfig {
     RepoConfig { bump_strategy: BumpStrategy::Patch, ..RepoConfig::default() }
@@ -93,7 +98,7 @@ fn every_start_cuts_from_origin_when_the_local_parent_is_stale() {
             Box::new(|git| start_hotfix_fix(git, &hosting, &cfg, "crash", false, None, "main", None)),
             "create_branch:hotfix/1.0.1:origin/main"),
         ("new release from develop", "feature/login", "develop",
-            Box::new(|git| start_release(git, &MockPrompter::new(), &hosting, None, &cfg, Some(ReleaseType::Minor), "main", None)),
+            Box::new(|git| start_release(git, &MockPrompter::new(), &hosting, None, &cfg, Some(ReleaseType::Minor), "main", None).map(|_| ())),
             "create_branch:release/1.1.0:origin/develop"),
     ];
     for (case, current, stale_parent, start, expected) in cases {
@@ -158,7 +163,9 @@ fn start_release_creates_new_when_no_release_exists_with_tags() {
     git.branches_matching = vec![]; // no existing release branches
     git.tags = vec!["v1.0.0".to_string()];
 
-    start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &RepoConfig::default(), Some(ReleaseType::Minor), "main", None).unwrap();
+    let event = start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &RepoConfig::default(), Some(ReleaseType::Minor), "main", None).unwrap();
+
+    assert_eq!(event, started("v1.1.0-rc.1"));
 
     assert_eq!(git.calls(), vec![
         "list_branches_matching:release/*",
@@ -167,7 +174,8 @@ fn start_release_creates_new_when_no_release_exists_with_tags() {
         "remote_branch_exists:develop",
         "create_branch:release/1.1.0:develop",
         "push:release/1.1.0",
-        "create_tag:v1.1.0-rc.1:chore: create release branch 1.1.0",
+        "tags_on_branch:release/1.1.0",
+        "create_tag:v1.1.0-rc.1:chore: bump version to v1.1.0-rc.1",
         "push_tag:v1.1.0-rc.1",
     ]);
 }
@@ -194,7 +202,8 @@ fn start_release_cuts_the_next_version_from_the_latest_tag() {
             "remote_branch_exists:develop".to_string(),
             format!("create_branch:release/{version}:develop"),
             format!("push:release/{version}"),
-            format!("create_tag:v{version}-rc.1:chore: create release branch {version}"),
+            format!("tags_on_branch:release/{version}"),
+            format!("create_tag:v{version}-rc.1:chore: bump version to v{version}-rc.1"),
             format!("push_tag:v{version}-rc.1"),
         ], "{case}");
     }
@@ -326,7 +335,10 @@ fn start_release_patch_protected_skips_branch_landed_via_squash_pr() {
     let calls = git.calls();
     assert!(calls.iter().any(|c| c == "create_branch:release/1.2.0:develop"),
         "squash-landed branch is shipped; calls: {calls:?}");
-    assert_eq!(hosting.calls(), vec!["merged_pr_to:release/1.1.0:main"]);
+    assert_eq!(hosting.calls(), vec![
+        "merged_pr_to:release/1.1.0:main",
+        "merged_pr_to:version/1.2.0-into-release-1.2.0:release/1.2.0",
+    ]);
 }
 
 #[test]
@@ -335,7 +347,9 @@ fn start_release_patch_mode_cuts_a_clean_first_tag() {
     git.branches_matching = vec![];
     git.tags = vec!["v1.0.0".to_string()];
 
-    start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &patch_cfg(), Some(ReleaseType::Minor), "main", None).unwrap();
+    let event = start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &patch_cfg(), Some(ReleaseType::Minor), "main", None).unwrap();
+
+    assert_eq!(event, started("v1.1.0"));
 
     assert_eq!(git.calls(), vec![
         "list_branches_matching:release/*",
@@ -344,7 +358,8 @@ fn start_release_patch_mode_cuts_a_clean_first_tag() {
         "remote_branch_exists:develop",
         "create_branch:release/1.1.0:develop",
         "push:release/1.1.0",
-        "create_tag:v1.1.0:chore: create release branch 1.1.0",
+        "tags_on_branch:release/1.1.0",
+        "create_tag:v1.1.0:chore: bump version to v1.1.0",
         "push_tag:v1.1.0",
     ]);
 }
@@ -384,7 +399,8 @@ fn start_release_creates_new_when_all_releases_shipped() {
         "remote_branch_exists:develop",
         "create_branch:release/1.2.0:develop",
         "push:release/1.2.0",
-        "create_tag:v1.2.0-rc.1:chore: create release branch 1.2.0",
+        "tags_on_branch:release/1.2.0",
+        "create_tag:v1.2.0-rc.1:chore: bump version to v1.2.0-rc.1",
         "push_tag:v1.2.0-rc.1",
     ]);
 }
@@ -700,7 +716,7 @@ fn start_release_script_noop_makes_no_commit() {
     let mut git = MockGit::new();
     git.branches_matching = vec![];
     git.tags = vec!["v1.0.0".to_string()];
-    git.working_tree_clean_seq.borrow_mut().extend([true, true]);
+    git.working_tree_clean_seq.borrow_mut().extend([true, true, true]);
     let script = MockVersionScript::new();
 
     start_release(&git, &MockPrompter::new(), &MockHosting::new(), Some(&script), &RepoConfig::default(), Some(ReleaseType::Minor), "main", None).unwrap();
@@ -712,17 +728,69 @@ fn start_release_script_noop_makes_no_commit() {
         "checkout:develop",
         "remote_branch_exists:develop",
         "create_branch:release/1.1.0:develop",
-        "is_working_tree_clean",
         "push:release/1.1.0",
-        "create_tag:v1.1.0-rc.1:chore: create release branch 1.1.0",
+        "tags_on_branch:release/1.1.0",
+        "is_working_tree_clean",
+        "is_working_tree_clean",
+        "create_tag:v1.1.0-rc.1:chore: bump version to v1.1.0-rc.1",
         "push_tag:v1.1.0-rc.1",
-        "checkout:develop",
-        "ff_merge:origin/develop",
-        "is_working_tree_clean",
-        "is_working_tree_clean",
-        "checkout:release/1.1.0",
     ]);
-    assert_eq!(script.calls(), vec!["run:1.1.0", "run:1.2.0"]);
+    assert_eq!(script.calls(), vec!["run:1.1.0"]);
+}
+
+#[test]
+fn start_release_free_commits_the_version_on_the_release_branch_and_leaves_develop_alone() {
+    let mut git = MockGit::new();
+    git.tags = vec!["v1.0.0".to_string()];
+    git.working_tree_clean_seq.borrow_mut().extend([true, true, false]);
+    let script = MockVersionScript::new();
+
+    let event = start_release(&git, &MockPrompter::new(), &MockHosting::new(), Some(&script), &RepoConfig::default(), Some(ReleaseType::Minor), "main", None).unwrap();
+
+    assert_eq!(event, started("v1.1.0-rc.1"));
+    assert_eq!(git.calls()[6..], [
+        "push:release/1.1.0",
+        "tags_on_branch:release/1.1.0",
+        "is_working_tree_clean",
+        "is_working_tree_clean",
+        "stage_all",
+        "commit:chore: set version 1.1.0",
+        "push:release/1.1.0",
+        "create_tag:v1.1.0-rc.1:chore: bump version to v1.1.0-rc.1",
+        "push_tag:v1.1.0-rc.1",
+    ]);
+    assert_eq!(script.calls(), vec!["run:1.1.0"]);
+}
+
+#[test]
+fn start_release_protected_lands_the_first_version_on_a_version_branch_and_tags_its_squash_commit() {
+    for (cfg, tag) in [
+        (RepoConfig { mode: Mode::Protected, ..RepoConfig::default() }, "v1.1.0-rc.1"),
+        (patch_protected_cfg(), "v1.1.0"),
+    ] {
+        let mut git = MockGit::new();
+        git.tags = vec!["v1.0.0".to_string()];
+        git.working_tree_clean_seq.borrow_mut().extend([true, true, false]);
+        git.ancestors.insert(("merge-commit-sha".to_string(), "origin/release/1.1.0".to_string()));
+        let mut hosting = MockHosting::new();
+        hosting.landed_on_merge.insert(
+            ("version/1.1.0-into-release-1.1.0".to_string(), "release/1.1.0".to_string()),
+            gflow::hosting::LandedPr { url: "https://github.com/org/repo/pull/1".to_string(), head_sha: "version-head".to_string(), merge_commit_sha: "merge-commit-sha".to_string() },
+        );
+        let script = MockVersionScript::new();
+
+        let event = start_release(&git, &MockPrompter::new(), &hosting, Some(&script), &cfg, Some(ReleaseType::Minor), "main", None).unwrap();
+
+        assert_eq!(event, started(tag), "{tag}");
+        let calls = git.calls();
+        let cut = calls.iter().position(|c| c == "create_branch:release/1.1.0:develop").unwrap();
+        assert_eq!(calls[cut + 1], "push:release/1.1.0", "{tag}");
+        assert!(calls.contains(&"create_branch:version/1.1.0-into-release-1.1.0:release/1.1.0".to_string()), "{tag}: {calls:?}");
+        assert!(calls.contains(&format!("create_tag_at:{tag}:chore: bump version to {tag}:merge-commit-sha")), "{tag}: {calls:?}");
+        assert!(!calls[cut..].contains(&"checkout:develop".to_string()), "{tag}: develop is not bumped: {calls:?}");
+        assert!(hosting.calls().contains(&"merge_pr:https://github.com/org/repo/pull/1".to_string()), "{tag}");
+        assert_eq!(script.calls(), vec!["run:1.1.0"], "{tag}");
+    }
 }
 
 #[test]
@@ -762,330 +830,6 @@ fn start_release_reuse_path_never_runs_script() {
     assert!(script.calls().is_empty());
 }
 
-// --- M2: develop version bump after release cut ---
-// Only reachable from the create path (never the reuse path above), and only
-// when a script is configured. Runs last, after the rc.1 tag is pushed.
-
-#[test]
-fn m2_free_mode_bumps_develop_and_returns_to_the_release_branch() {
-    let mut git = MockGit::new();
-    git.branches_matching = vec![];
-    git.tags = vec!["v1.0.0".to_string()];
-    git.working_tree_clean_seq.borrow_mut().extend([true, false, true, false]);
-    let script = MockVersionScript::new();
-
-    start_release(&git, &MockPrompter::new(), &MockHosting::new(), Some(&script), &RepoConfig::default(), Some(ReleaseType::Minor), "main", None).unwrap();
-
-    assert_eq!(git.calls(), vec![
-        "list_branches_matching:release/*",
-        "list_tags",
-        "is_working_tree_clean",
-        "checkout:develop",
-        "remote_branch_exists:develop",
-        "create_branch:release/1.1.0:develop",
-        "is_working_tree_clean",
-        "stage_all",
-        "commit:chore: set version 1.1.0",
-        "push:release/1.1.0",
-        "create_tag:v1.1.0-rc.1:chore: create release branch 1.1.0",
-        "push_tag:v1.1.0-rc.1",
-        "checkout:develop",
-        "ff_merge:origin/develop",
-        "is_working_tree_clean",
-        "is_working_tree_clean",
-        "stage_all",
-        "commit:chore: set version 1.2.0",
-        "push:develop",
-        "checkout:release/1.1.0",
-    ]);
-    assert_eq!(script.calls(), vec!["run:1.1.0", "run:1.2.0"]);
-}
-
-#[test]
-fn m2_free_mode_noop_skips_the_push() {
-    let mut git = MockGit::new();
-    git.branches_matching = vec![];
-    git.tags = vec!["v1.0.0".to_string()];
-    git.working_tree_clean_seq.borrow_mut().extend([true, false, true, true]);
-    let script = MockVersionScript::new();
-
-    start_release(&git, &MockPrompter::new(), &MockHosting::new(), Some(&script), &RepoConfig::default(), Some(ReleaseType::Minor), "main", None).unwrap();
-
-    assert_eq!(git.calls(), vec![
-        "list_branches_matching:release/*",
-        "list_tags",
-        "is_working_tree_clean",
-        "checkout:develop",
-        "remote_branch_exists:develop",
-        "create_branch:release/1.1.0:develop",
-        "is_working_tree_clean",
-        "stage_all",
-        "commit:chore: set version 1.1.0",
-        "push:release/1.1.0",
-        "create_tag:v1.1.0-rc.1:chore: create release branch 1.1.0",
-        "push_tag:v1.1.0-rc.1",
-        "checkout:develop",
-        "ff_merge:origin/develop",
-        "is_working_tree_clean",
-        "is_working_tree_clean",
-        "checkout:release/1.1.0",
-    ]);
-    assert!(!git.calls().contains(&"push:develop".to_string()));
-    assert_eq!(script.calls(), vec!["run:1.1.0", "run:1.2.0"]);
-}
-
-#[test]
-fn m2_protected_mode_opens_a_version_pr_on_a_fresh_branch() {
-    let mut git = MockGit::new();
-    git.branches_matching = vec![];
-    git.tags = vec!["v1.0.0".to_string()];
-    git.working_tree_clean_seq.borrow_mut().extend([true, false, true, false]);
-    let script = MockVersionScript::new();
-    let hosting = MockHosting::new();
-    let cfg = RepoConfig { mode: Mode::Protected, keep_release_branches: false, ..RepoConfig::default() };
-
-    start_release(&git, &MockPrompter::new(), &hosting, Some(&script), &cfg, Some(ReleaseType::Minor), "main", None).unwrap();
-
-    assert_eq!(git.calls(), vec![
-        "list_branches_matching:release/*",
-        "list_tags",
-        "is_working_tree_clean",
-        "checkout:develop",
-        "remote_branch_exists:develop",
-        "create_branch:release/1.1.0:develop",
-        "is_working_tree_clean",
-        "stage_all",
-        "commit:chore: set version 1.1.0",
-        "push:release/1.1.0",
-        "create_tag:v1.1.0-rc.1:chore: create release branch 1.1.0",
-        "push_tag:v1.1.0-rc.1",
-        "checkout:develop",
-        "ff_merge:origin/develop",
-        "remote_branch_exists:chore/set-version-1.2.0",
-        "local_branch_exists:chore/set-version-1.2.0",
-        "create_branch:chore/set-version-1.2.0:develop",
-        "is_working_tree_clean",
-        "is_working_tree_clean",
-        "stage_all",
-        "commit:chore: set version 1.2.0",
-        "push:chore/set-version-1.2.0",
-        "checkout:release/1.1.0",
-    ]);
-    assert!(!git.calls().contains(&"push:develop".to_string()),
-        "protected mode must never push develop directly; calls: {:?}", git.calls());
-    assert_eq!(hosting.calls(), vec![
-        "create_or_get_pr:chore/set-version-1.2.0:develop:chore: set version 1.2.0",
-        "copy_text:chore: set version 1.2.0\nhttps://github.com/org/repo/pull/1",
-        "open_url:https://github.com/org/repo/pull/1",
-    ]);
-    assert_eq!(script.calls(), vec!["run:1.1.0", "run:1.2.0"]);
-}
-
-#[test]
-fn m2_protected_mode_noop_deletes_the_fresh_chore_branch() {
-    let mut git = MockGit::new();
-    git.branches_matching = vec![];
-    git.tags = vec!["v1.0.0".to_string()];
-    git.working_tree_clean_seq.borrow_mut().extend([true, false, true, true]);
-    let script = MockVersionScript::new();
-    let hosting = MockHosting::new();
-    let cfg = RepoConfig { mode: Mode::Protected, keep_release_branches: false, ..RepoConfig::default() };
-
-    start_release(&git, &MockPrompter::new(), &hosting, Some(&script), &cfg, Some(ReleaseType::Minor), "main", None).unwrap();
-
-    assert_eq!(git.calls(), vec![
-        "list_branches_matching:release/*",
-        "list_tags",
-        "is_working_tree_clean",
-        "checkout:develop",
-        "remote_branch_exists:develop",
-        "create_branch:release/1.1.0:develop",
-        "is_working_tree_clean",
-        "stage_all",
-        "commit:chore: set version 1.1.0",
-        "push:release/1.1.0",
-        "create_tag:v1.1.0-rc.1:chore: create release branch 1.1.0",
-        "push_tag:v1.1.0-rc.1",
-        "checkout:develop",
-        "ff_merge:origin/develop",
-        "remote_branch_exists:chore/set-version-1.2.0",
-        "local_branch_exists:chore/set-version-1.2.0",
-        "create_branch:chore/set-version-1.2.0:develop",
-        "is_working_tree_clean",
-        "is_working_tree_clean",
-        "checkout:develop",
-        "delete_branch_local:chore/set-version-1.2.0",
-        "checkout:release/1.1.0",
-    ]);
-    assert!(hosting.calls().is_empty(), "a no-op version bump must never open a PR; calls: {:?}", hosting.calls());
-    assert_eq!(script.calls(), vec!["run:1.1.0", "run:1.2.0"]);
-}
-
-#[test]
-fn m2_protected_mode_reuses_a_leftover_chore_branch_without_recreating_it() {
-    let mut git = MockGit::new();
-    git.branches_matching = vec![];
-    git.tags = vec!["v1.0.0".to_string()];
-    git.working_tree_clean_seq.borrow_mut().extend([true, false]);
-    git.existing_remote_branches.insert("chore/set-version-1.2.0".to_string());
-    let script = MockVersionScript::new();
-    let hosting = MockHosting::new();
-    let cfg = RepoConfig { mode: Mode::Protected, keep_release_branches: false, ..RepoConfig::default() };
-
-    start_release(&git, &MockPrompter::new(), &hosting, Some(&script), &cfg, Some(ReleaseType::Minor), "main", None).unwrap();
-
-    assert_eq!(git.calls(), vec![
-        "list_branches_matching:release/*",
-        "list_tags",
-        "is_working_tree_clean",
-        "checkout:develop",
-        "remote_branch_exists:develop",
-        "create_branch:release/1.1.0:develop",
-        "is_working_tree_clean",
-        "stage_all",
-        "commit:chore: set version 1.1.0",
-        "push:release/1.1.0",
-        "create_tag:v1.1.0-rc.1:chore: create release branch 1.1.0",
-        "push_tag:v1.1.0-rc.1",
-        "checkout:develop",
-        "ff_merge:origin/develop",
-        "remote_branch_exists:chore/set-version-1.2.0",
-        "checkout:release/1.1.0",
-    ]);
-    assert!(!git.calls().iter().any(|c| c.starts_with("create_branch:chore")),
-        "a leftover remote branch must be reused, never recreated; calls: {:?}", git.calls());
-    assert_eq!(hosting.calls(), vec![
-        "create_or_get_pr:chore/set-version-1.2.0:develop:chore: set version 1.2.0",
-        "copy_text:chore: set version 1.2.0\nhttps://github.com/org/repo/pull/1",
-        "open_url:https://github.com/org/repo/pull/1",
-    ]);
-    assert_eq!(script.calls(), vec!["run:1.1.0"], "the leftover-reuse path never re-runs the script");
-}
-
-#[test]
-fn bump_develop_protected_deletes_leftover_local_chore_branch_before_recreating() {
-    // Mirrors bump_protected's own leftover-local fix (finish_release.rs): a
-    // prior M2 run can leave chore/set-version-{dev} behind locally only, and
-    // re-running must not die on git's raw "branch already exists".
-    let mut git = MockGit::new();
-    git.branches_matching = vec![];
-    git.tags = vec!["v1.0.0".to_string()];
-    git.working_tree_clean_seq.borrow_mut().extend([true, false, true, false]);
-    git.existing_local_branches.insert("chore/set-version-1.2.0".to_string());
-    let script = MockVersionScript::new();
-    let hosting = MockHosting::new();
-    let cfg = RepoConfig { mode: Mode::Protected, keep_release_branches: false, ..RepoConfig::default() };
-
-    start_release(&git, &MockPrompter::new(), &hosting, Some(&script), &cfg, Some(ReleaseType::Minor), "main", None).unwrap();
-
-    assert_eq!(git.calls(), vec![
-        "list_branches_matching:release/*",
-        "list_tags",
-        "is_working_tree_clean",
-        "checkout:develop",
-        "remote_branch_exists:develop",
-        "create_branch:release/1.1.0:develop",
-        "is_working_tree_clean",
-        "stage_all",
-        "commit:chore: set version 1.1.0",
-        "push:release/1.1.0",
-        "create_tag:v1.1.0-rc.1:chore: create release branch 1.1.0",
-        "push_tag:v1.1.0-rc.1",
-        "checkout:develop",
-        "ff_merge:origin/develop",
-        "remote_branch_exists:chore/set-version-1.2.0",
-        "local_branch_exists:chore/set-version-1.2.0",
-        "delete_branch_local:chore/set-version-1.2.0",
-        "create_branch:chore/set-version-1.2.0:develop",
-        "is_working_tree_clean",
-        "is_working_tree_clean",
-        "stage_all",
-        "commit:chore: set version 1.2.0",
-        "push:chore/set-version-1.2.0",
-        "checkout:release/1.1.0",
-    ]);
-    assert_eq!(hosting.calls(), vec![
-        "create_or_get_pr:chore/set-version-1.2.0:develop:chore: set version 1.2.0",
-        "copy_text:chore: set version 1.2.0\nhttps://github.com/org/repo/pull/1",
-        "open_url:https://github.com/org/repo/pull/1",
-    ]);
-}
-
-#[test]
-fn bump_develop_protected_script_failure_restores_to_develop_then_release_branch() {
-    // A failed M2 script run must not strand the operator on the chore
-    // branch: gflow best-effort restores develop first, so the outer warn
-    // path's own final checkout (back to the release branch) still works.
-    let mut git = MockGit::new();
-    git.branches_matching = vec![];
-    git.tags = vec!["v1.0.0".to_string()];
-    git.working_tree_clean_seq.borrow_mut().extend([true, false, true]);
-    let mut script = MockVersionScript::new();
-    script.fail_nth_run = Some(2); // M1's run succeeds; M2's (the 2nd) fails
-    let hosting = MockHosting::new();
-    let cfg = RepoConfig { mode: Mode::Protected, keep_release_branches: false, ..RepoConfig::default() };
-
-    let result = start_release(&git, &MockPrompter::new(), &hosting, Some(&script), &cfg, Some(ReleaseType::Minor), "main", None);
-
-    assert!(result.is_ok(), "a failed M2 script run must not undo an already-created release: {result:?}");
-    assert_eq!(git.calls(), vec![
-        "list_branches_matching:release/*",
-        "list_tags",
-        "is_working_tree_clean",
-        "checkout:develop",
-        "remote_branch_exists:develop",
-        "create_branch:release/1.1.0:develop",
-        "is_working_tree_clean",
-        "stage_all",
-        "commit:chore: set version 1.1.0",
-        "push:release/1.1.0",
-        "create_tag:v1.1.0-rc.1:chore: create release branch 1.1.0",
-        "push_tag:v1.1.0-rc.1",
-        "checkout:develop",
-        "ff_merge:origin/develop",
-        "remote_branch_exists:chore/set-version-1.2.0",
-        "local_branch_exists:chore/set-version-1.2.0",
-        "create_branch:chore/set-version-1.2.0:develop",
-        "is_working_tree_clean",
-        "checkout:develop",
-        "checkout:release/1.1.0",
-    ]);
-    assert!(hosting.calls().is_empty(), "no PR call on script failure; calls: {:?}", hosting.calls());
-    assert_eq!(script.calls(), vec!["run:1.1.0", "run:1.2.0"]);
-}
-
-#[test]
-fn m2_failure_is_warn_and_continue_the_release_already_succeeded() {
-    let mut git = MockGit::new();
-    git.branches_matching = vec![];
-    git.tags = vec!["v1.0.0".to_string()];
-    git.working_tree_clean_seq.borrow_mut().extend([true, false]);
-    git.ff_merge_error = Some("fatal: not something we can merge".to_string());
-    let script = MockVersionScript::new();
-
-    let result = start_release(&git, &MockPrompter::new(), &MockHosting::new(), Some(&script), &RepoConfig::default(), Some(ReleaseType::Minor), "main", None);
-
-    assert!(result.is_ok(), "a failed develop bump must not undo an already-created release: {result:?}");
-    assert_eq!(git.calls(), vec![
-        "list_branches_matching:release/*",
-        "list_tags",
-        "is_working_tree_clean",
-        "checkout:develop",
-        "remote_branch_exists:develop",
-        "create_branch:release/1.1.0:develop",
-        "is_working_tree_clean",
-        "stage_all",
-        "commit:chore: set version 1.1.0",
-        "push:release/1.1.0",
-        "create_tag:v1.1.0-rc.1:chore: create release branch 1.1.0",
-        "push_tag:v1.1.0-rc.1",
-        "checkout:develop",
-        "ff_merge:origin/develop",
-        "checkout:release/1.1.0",
-    ]);
-    assert_eq!(script.calls(), vec!["run:1.1.0"], "M2's own script run never happens once ff_merge fails");
-}
-
 #[test]
 fn start_hotfix_fix_runs_version_script_on_new_branch() {
     let mut git = MockGit::new();
@@ -1113,6 +857,58 @@ fn start_hotfix_fix_runs_version_script_on_new_branch() {
         "push:hotfix-fix/1.0.1/urgent-crash",
     ]);
     assert_eq!(script.calls(), vec!["run:1.0.1"]);
+}
+
+#[test]
+fn start_hotfix_fix_protected_lands_the_hotfix_version_on_a_version_branch_without_a_tag() {
+    let mut git = MockGit::new();
+    git.tags = vec!["1.0.0".to_string()];
+    git.working_tree_clean_seq.borrow_mut().extend([true, true, false]);
+    let hosting = MockHosting::new();
+    let script = MockVersionScript::new();
+    let cfg = RepoConfig { mode: Mode::Protected, ..RepoConfig::default() };
+
+    start_hotfix_fix(&git, &hosting, &cfg, "urgent-crash", false, None, "main", Some(&script)).unwrap();
+
+    assert_eq!(git.calls()[5..], [
+        "checkout:main",
+        "create_branch:hotfix/1.0.1:main",
+        "push:hotfix/1.0.1",
+        "remote_branch_exists:version/1.0.1-into-hotfix-1.0.1",
+        "is_working_tree_clean",
+        "local_branch_exists:version/1.0.1-into-hotfix-1.0.1",
+        "create_branch:version/1.0.1-into-hotfix-1.0.1:hotfix/1.0.1",
+        "is_working_tree_clean",
+        "stage_all",
+        "commit:chore: set version 1.0.1",
+        "push:version/1.0.1-into-hotfix-1.0.1",
+        "checkout:hotfix/1.0.1",
+        "fetch",
+        "ff_merge:origin/hotfix/1.0.1",
+        "remote_branch_exists:hotfix/1.0.1",
+        "create_branch:hotfix-fix/1.0.1/urgent-crash:hotfix/1.0.1",
+        "push:hotfix-fix/1.0.1/urgent-crash",
+    ]);
+    assert!(hosting.calls().contains(&"create_or_get_pr:version/1.0.1-into-hotfix-1.0.1:hotfix/1.0.1:chore: set version 1.0.1".to_string()));
+    assert_eq!(hosting.calls().last().unwrap(), "merge_pr:https://github.com/org/repo/pull/1");
+    assert!(!git.calls().iter().any(|c| c.starts_with("create_tag")), "a hotfix is tagged at finish, not at start");
+    assert_eq!(script.calls(), vec!["run:1.0.1"]);
+}
+
+#[test]
+fn start_hotfix_fix_protected_whose_version_pr_cannot_merge_yet_still_creates_the_fix_branch() {
+    let mut git = MockGit::new();
+    git.tags = vec!["1.0.0".to_string()];
+    git.working_tree_clean_seq.borrow_mut().extend([true, true, false]);
+    let mut hosting = MockHosting::new();
+    hosting.merge_pr_error = Some("required checks are pending".to_string());
+    let cfg = RepoConfig { mode: Mode::Protected, ..RepoConfig::default() };
+
+    start_hotfix_fix(&git, &hosting, &cfg, "urgent-crash", false, None, "main", Some(&MockVersionScript::new())).unwrap();
+
+    assert_eq!(hosting.calls().last().unwrap(), "enable_auto_complete:https://github.com/org/repo/pull/1");
+    assert!(!git.calls().contains(&"fetch".to_string()));
+    assert_eq!(git.calls().last().unwrap(), "push:hotfix-fix/1.0.1/urgent-crash");
 }
 
 #[test]
@@ -1464,7 +1260,9 @@ fn start_release_worktree_mode_creates_here_then_opens_a_worktree() {
     let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
     let ctx = WorktreeContext { env: &env, prompter: &prompter };
 
-    start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &RepoConfig::default(), Some(ReleaseType::Minor), "main", Some(ctx)).unwrap();
+    let event = start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &RepoConfig::default(), Some(ReleaseType::Minor), "main", Some(ctx)).unwrap();
+
+    assert_eq!(event, started("v1.1.0-rc.1"));
 
     let expected = std::env::temp_dir().join("beans-gitflow-release-1.1.0").display().to_string();
     assert_eq!(git.calls(), vec![
@@ -1474,7 +1272,8 @@ fn start_release_worktree_mode_creates_here_then_opens_a_worktree() {
         "remote_branch_exists:develop".to_string(),
         "create_branch:release/1.1.0:develop".to_string(),
         "push:release/1.1.0".to_string(),
-        "create_tag:v1.1.0-rc.1:chore: create release branch 1.1.0".to_string(),
+        "tags_on_branch:release/1.1.0".to_string(),
+        "create_tag:v1.1.0-rc.1:chore: bump version to v1.1.0-rc.1".to_string(),
         "push_tag:v1.1.0-rc.1".to_string(),
         "checkout:develop".to_string(),
         "worktree_of:release/1.1.0".to_string(),
@@ -1495,7 +1294,9 @@ fn start_release_worktree_mode_opens_a_worktree_for_an_existing_release() {
     let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
     let ctx = WorktreeContext { env: &env, prompter: &prompter };
 
-    start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &RepoConfig::default(), None, "main", Some(ctx)).unwrap();
+    let event = start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &RepoConfig::default(), None, "main", Some(ctx)).unwrap();
+
+    assert_eq!(event, None);
 
     let calls = git.calls();
     assert!(!calls.contains(&"checkout:release/1.1.0".to_string()), "must not switch the current tree; calls: {calls:?}");
@@ -1646,7 +1447,9 @@ fn start_release_reuses_the_newest_open_release_branch() {
     let mut git = MockGit::new();
     git.branches_matching = vec!["release/1.0.0".to_string(), "release/1.3.0".to_string()];
 
-    start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &RepoConfig::default(), Some(ReleaseType::Minor), "main", None).unwrap();
+    let event = start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &RepoConfig::default(), Some(ReleaseType::Minor), "main", None).unwrap();
+
+    assert_eq!(event, None);
 
     assert_eq!(git.calls(), vec![
         "list_branches_matching:release/*",
@@ -1684,7 +1487,7 @@ fn the_first_patch_hotfix_starts_at_zero_zero_one() {
         .contains(&"create_branch:hotfix-fix/0.0.1/repair:hotfix/0.0.1".into()));
 }
 
-fn assert_stopped(git: &MockGit, result: Result<(), String>, call: &str) {
+fn assert_stopped<T: std::fmt::Debug + PartialEq>(git: &MockGit, result: Result<T, String>, call: &str) {
     assert_eq!(result, Err(format!("injected git failure: {call}")));
     assert_eq!(git.calls().last().map(String::as_str), Some(call));
 }
@@ -1694,7 +1497,7 @@ fn release_git() -> MockGit {
     git.tags = vec!["v1.0.0".into()];
     git.working_tree_clean_seq
         .borrow_mut()
-        .extend([true, false, true, false]);
+        .extend([true, true, false]);
     git
 }
 
@@ -1727,14 +1530,14 @@ fn creating_a_release_stops_at_every_failed_prepublication_step() {
         ("checkout:develop", 1),
         ("remote_branch_exists:develop", 1),
         ("create_branch:release/1.1.0:develop", 1),
+        ("push:release/1.1.0", 1),
+        ("tags_on_branch:release/1.1.0", 1),
         ("is_working_tree_clean", 2),
+        ("is_working_tree_clean", 3),
         ("stage_all", 1),
         ("commit:chore: set version 1.1.0", 1),
-        ("push:release/1.1.0", 1),
-        (
-            "create_tag:v1.1.0-rc.1:chore: create release branch 1.1.0",
-            1,
-        ),
+        ("push:release/1.1.0", 2),
+        ("create_tag:v1.1.0-rc.1:chore: bump version to v1.1.0-rc.1", 1),
         ("push_tag:v1.1.0-rc.1", 1),
     ] {
         let mut git = release_git();
@@ -1975,135 +1778,6 @@ fn patch_release_discovery_does_not_reuse_a_branch_when_shipping_status_is_unkno
 }
 
 #[test]
-fn published_release_survives_develop_version_bump_failures() {
-    for (call, occurrence) in [
-        ("checkout:develop", 2),
-        ("is_working_tree_clean", 3),
-        ("is_working_tree_clean", 4),
-        ("stage_all", 2),
-        ("commit:chore: set version 1.2.0", 1),
-        ("push:develop", 1),
-    ] {
-        let mut git = release_git();
-        git.fail_call = Some((call.into(), occurrence));
-        start_release(
-            &git,
-            &MockPrompter::new(),
-            &MockHosting::new(),
-            Some(&MockVersionScript::new()),
-            &RepoConfig::default(),
-            Some(ReleaseType::Minor),
-            "main",
-            None,
-        )
-        .unwrap();
-        let calls = git.calls();
-        assert!(calls.contains(&"push_tag:v1.1.0-rc.1".into()));
-        let failed = calls
-            .iter()
-            .enumerate()
-            .filter(|(_, value)| *value == call)
-            .nth(occurrence - 1)
-            .unwrap()
-            .0;
-        assert_eq!(
-            &calls[failed + 1..],
-            ["checkout:release/1.1.0"],
-            "failure: {call}"
-        );
-    }
-}
-
-#[test]
-fn protected_develop_bump_failures_preserve_the_release_and_restore_its_checkout() {
-    let cfg = RepoConfig {
-        mode: Mode::Protected,
-        ..RepoConfig::default()
-    };
-    for (call, occurrence, changed) in [
-        ("remote_branch_exists:chore/set-version-1.2.0", 1, true),
-        ("local_branch_exists:chore/set-version-1.2.0", 1, true),
-        ("delete_branch_local:chore/set-version-1.2.0", 1, true),
-        ("create_branch:chore/set-version-1.2.0:develop", 1, true),
-        ("is_working_tree_clean", 3, true),
-        ("push:chore/set-version-1.2.0", 1, true),
-        ("checkout:develop", 3, false),
-        ("delete_branch_local:chore/set-version-1.2.0", 2, false),
-    ] {
-        let mut git = release_git();
-        git.existing_local_branches
-            .insert("chore/set-version-1.2.0".into());
-        *git.working_tree_clean_seq.borrow_mut() = [true, false, true, !changed].into();
-        git.fail_call = Some((call.into(), occurrence));
-        let hosting = MockHosting::new();
-        start_release(
-            &git,
-            &MockPrompter::new(),
-            &hosting,
-            Some(&MockVersionScript::new()),
-            &cfg,
-            Some(ReleaseType::Minor),
-            "main",
-            None,
-        )
-        .unwrap();
-        let calls = git.calls();
-        let failed = calls
-            .iter()
-            .enumerate()
-            .filter(|(_, value)| *value == call)
-            .nth(occurrence - 1)
-            .unwrap()
-            .0;
-        assert_eq!(
-            &calls[failed + 1..],
-            ["checkout:release/1.1.0"],
-            "failure: {call}"
-        );
-        assert!(!calls.contains(&"push:develop".into()));
-        assert!(hosting.calls().is_empty());
-    }
-}
-
-#[test]
-fn protected_develop_pr_failure_preserves_the_release_for_new_and_reused_version_branches() {
-    let cfg = RepoConfig {
-        mode: Mode::Protected,
-        ..RepoConfig::default()
-    };
-    for remote_exists in [false, true] {
-        let mut git = release_git();
-        if remote_exists {
-            git.existing_remote_branches
-                .insert("chore/set-version-1.2.0".into());
-        }
-        let mut hosting = MockHosting::new();
-        hosting.fail_call = Some((
-            "create_or_get_pr:chore/set-version-1.2.0:develop:chore: set version 1.2.0".into(),
-            1,
-        ));
-        start_release(
-            &git,
-            &MockPrompter::new(),
-            &hosting,
-            Some(&MockVersionScript::new()),
-            &cfg,
-            Some(ReleaseType::Minor),
-            "main",
-            None,
-        )
-        .unwrap();
-        assert_eq!(
-            git.calls().last().map(String::as_str),
-            Some("checkout:release/1.1.0")
-        );
-        assert_eq!(hosting.calls().len(), 1);
-        assert!(git.calls().contains(&"push_tag:v1.1.0-rc.1".into()));
-        assert!(!git.calls().contains(&"push:develop".into()));
-    }
-}
-
-#[test]
 fn start_worktree_errors_stop_before_opening_the_editor_or_creating_a_fix() {
     let config = WorktreeConfig {
         enabled: true,
@@ -2158,7 +1832,8 @@ fn start_worktree_errors_stop_before_opening_the_editor_or_creating_a_fix() {
                 Some(ReleaseType::Minor),
                 "main",
                 ctx,
-            ),
+            )
+            .map(|_| ()),
         };
         assert_stopped(&git, result, call);
         assert!(editor.calls().is_empty());
@@ -2168,4 +1843,39 @@ fn start_worktree_errors_stop_before_opening_the_editor_or_creating_a_fix() {
 
 fn worktree_for(branch: &str) -> String {
     std::env::temp_dir().join(format!("beans-gitflow-{}", branch.replace('/', "-"))).display().to_string()
+}
+
+#[test]
+fn a_protected_hotfix_start_stops_at_every_failed_version_step() {
+    for (call, occurrence) in [
+        ("push:hotfix/1.0.1", 1),
+        ("remote_branch_exists:version/1.0.1-into-hotfix-1.0.1", 1),
+        ("fetch", 1),
+        ("ff_merge:origin/hotfix/1.0.1", 1),
+    ] {
+        let mut git = MockGit::new();
+        git.tags = vec!["1.0.0".to_string()];
+        git.working_tree_clean_seq.borrow_mut().extend([true, true, false]);
+        git.fail_call = Some((call.into(), occurrence));
+        let cfg = RepoConfig { mode: Mode::Protected, ..RepoConfig::default() };
+
+        let result = start_hotfix_fix(&git, &MockHosting::new(), &cfg, "urgent-crash", false, None, "main", Some(&MockVersionScript::new()));
+
+        assert_stopped(&git, result, call);
+    }
+}
+
+#[test]
+fn a_protected_hotfix_start_whose_script_changes_nothing_opens_no_version_pr() {
+    let mut git = MockGit::new();
+    git.tags = vec!["1.0.0".to_string()];
+    git.working_tree_clean_seq.borrow_mut().extend([true, true, true]);
+    let hosting = MockHosting::new();
+    let cfg = RepoConfig { mode: Mode::Protected, ..RepoConfig::default() };
+
+    start_hotfix_fix(&git, &hosting, &cfg, "urgent-crash", false, None, "main", Some(&MockVersionScript::new())).unwrap();
+
+    assert!(hosting.calls().is_empty(), "{:?}", hosting.calls());
+    assert!(git.calls().contains(&"delete_branch_local:version/1.0.1-into-hotfix-1.0.1".to_string()));
+    assert_eq!(git.calls().last().unwrap(), "push:hotfix-fix/1.0.1/urgent-crash");
 }

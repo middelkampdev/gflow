@@ -115,6 +115,8 @@ pub struct MockGit {
     /// SHA each branch's tip resolves to via `branch_sha`. A branch missing
     /// here falls back to `head_sha`.
     pub branch_shas: HashMap<String, String>,
+    /// Each rev's first-parent line for `first_parent_commits` (defaults to none).
+    pub first_parents: HashMap<String, Vec<String>>,
     /// Scripted `is_working_tree_clean` answers, consumed front-first. Empty
     /// (the default) falls back to `working_tree_clean`.
     pub working_tree_clean_seq: RefCell<VecDeque<bool>>,
@@ -171,6 +173,7 @@ impl MockGit {
             worktrees: HashMap::new(),
             tag_commits: HashMap::new(),
             branch_shas: HashMap::new(),
+            first_parents: HashMap::new(),
             working_tree_clean_seq: RefCell::new(VecDeque::new()),
             _git_dir_guard: None,
         }
@@ -261,6 +264,15 @@ impl Git for MockGit {
     fn create_tag(&self, tag: &str, message: &str) -> Result<(), String> {
         self.record(format!("create_tag:{tag}:{message}"))?;
         Ok(())
+    }
+
+    fn first_parent_commits(&self, rev: &str) -> Result<Vec<String>, String> {
+        self.record(format!("first_parent_commits:{rev}"))?;
+        Ok(self.first_parents.get(rev).cloned().unwrap_or_default())
+    }
+
+    fn merge_contained(&self, rev: &str, message: &str) -> Result<(), String> {
+        self.record(format!("merge_contained:{rev}:{message}"))
     }
 
     fn merge(&self, branch: &str, message: &str) -> Result<(), String> {
@@ -412,6 +424,12 @@ impl Git for MockGit {
 
     fn git_dir(&self) -> Result<PathBuf, String> {
         self.record("git_dir".to_string())?;
+        Ok(self.git_dir.clone())
+    }
+
+    /// The mock models a main tree, where the common dir is the git dir.
+    fn git_common_dir(&self) -> Result<PathBuf, String> {
+        self.record("git_common_dir".to_string())?;
         Ok(self.git_dir.clone())
     }
 
@@ -590,6 +608,13 @@ pub struct MockHosting {
     pub merged_pr: Option<gflow::hosting::MergedPr>,
     /// What `merged_pr_to` reports, keyed by (head, base) (defaults to none landed).
     pub merged_prs_to: HashMap<(String, String), gflow::hosting::LandedPr>,
+    /// When set, `enable_auto_complete` fails with this (the call is still recorded).
+    pub auto_complete_error: Option<String>,
+    /// When set, `merge_pr` fails with this (the call is still recorded).
+    pub merge_pr_error: Option<String>,
+    /// PRs that `merged_pr_to` reports only once `merge_pr` succeeded.
+    pub landed_on_merge: HashMap<(String, String), gflow::hosting::LandedPr>,
+    merged_now: std::cell::Cell<bool>,
 }
 
 impl MockHosting {
@@ -603,6 +628,10 @@ impl MockHosting {
             pr_url: "https://github.com/org/repo/pull/1".to_string(),
             merged_pr: None,
             merged_prs_to: HashMap::new(),
+            auto_complete_error: None,
+            merge_pr_error: None,
+            landed_on_merge: HashMap::new(),
+            merged_now: std::cell::Cell::new(false),
         }
     }
 
@@ -663,10 +692,23 @@ impl HostingPlatform for MockHosting {
         base: &str,
     ) -> Result<Option<gflow::hosting::LandedPr>, String> {
         self.record(format!("merged_pr_to:{head}:{base}"))?;
-        Ok(self
-            .merged_prs_to
-            .get(&(head.to_string(), base.to_string()))
-            .cloned())
+        let key = (head.to_string(), base.to_string());
+        let after_merge = self.merged_now.get().then(|| self.landed_on_merge.get(&key)).flatten();
+        Ok(after_merge.or_else(|| self.merged_prs_to.get(&key)).cloned())
+    }
+
+    fn enable_auto_complete(&self, url: &str) -> Result<(), String> {
+        self.record(format!("enable_auto_complete:{url}"))?;
+        self.auto_complete_error.clone().map_or(Ok(()), Err)
+    }
+
+    fn merge_pr(&self, url: &str) -> Result<(), String> {
+        self.record(format!("merge_pr:{url}"))?;
+        if let Some(e) = &self.merge_pr_error {
+            return Err(e.clone());
+        }
+        self.merged_now.set(true);
+        Ok(())
     }
 
     fn open_url(&self, url: &str) -> Result<(), String> {
@@ -1034,4 +1076,45 @@ pub fn tmp_dir(prefix: &str) -> TempDir {
     let dir = std::env::temp_dir().join(format!("{prefix}-{}-{n}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     TempDir(dir)
+}
+
+/// One recorded hook run: the command, its cwd, and its environment.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HookRun {
+    pub command: String,
+    pub cwd: PathBuf,
+    pub env: Vec<(String, String)>,
+}
+
+pub struct MockHookShell {
+    pub runs: RefCell<Vec<HookRun>>,
+    /// Per-command outcome; a missing command exits 0. `Err` = the shell could
+    /// not be started, `Ok(None)` = killed by a signal.
+    pub outcomes: HashMap<String, Result<Option<i32>, String>>,
+    /// Simulates a crash: panic right after this many commands have finished.
+    pub crash_after: Option<usize>,
+}
+
+impl MockHookShell {
+    pub fn new() -> Self {
+        Self { runs: RefCell::new(Vec::new()), outcomes: HashMap::new(), crash_after: None }
+    }
+
+    pub fn commands(&self) -> Vec<String> {
+        self.runs.borrow().iter().map(|r| r.command.clone()).collect()
+    }
+}
+
+impl gflow::hooks::HookShell for MockHookShell {
+    fn run(&self, command: &str, cwd: &Path, env: &[(&'static str, String)]) -> Result<Option<i32>, String> {
+        self.runs.borrow_mut().push(HookRun {
+            command: command.to_string(),
+            cwd: cwd.to_path_buf(),
+            env: env.iter().map(|(k, v)| (k.to_string(), v.clone())).collect(),
+        });
+        if self.crash_after == Some(self.runs.borrow().len()) {
+            panic!("simulated crash after hook command {}", self.runs.borrow().len());
+        }
+        self.outcomes.get(command).cloned().unwrap_or(Ok(Some(0)))
+    }
 }

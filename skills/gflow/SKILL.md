@@ -10,7 +10,7 @@ description: ALWAYS load this skill before ANY git branch operation — creating
 Applies when the repo has a `.gflow/` directory, or the user asks for gflow.
 Neither → not a gflow repo; use normal git, this skill does not apply.
 
-**Minimum gflow version: 5.0.0.** In a gflow repo, run `gflow --version` once
+**Minimum gflow version: 6.0.0.** In a gflow repo, run `gflow --version` once
 before the first gflow command of a session:
 
 - **Not found** → tell the user to install gflow, then stop. Do **not** fall
@@ -88,8 +88,8 @@ Every PR gflow creates or re-surfaces (work/fix PRs, protected landing PRs, vers
   - PR target: detected from branch topology (branches forked off further back than `develop` are never offered); a single candidate is used directly, multiple candidates show a menu. `--base <branch>` sets the target explicitly and skips both — **AI agents/CI must pass `--base` (plus `--breaking`) so finish never needs a TTY** (e.g. `gflow finish --base develop --breaking=false`). The branch must exist on origin (push or fetch first) and differ from the current branch. Not valid on release/hotfix/release-fix/hotfix-fix (fixed target).
   - **PR already merged** → re-running `gflow finish` completes the finish instead of opening a new PR: deletes remote + local branch and, when the branch is in its own worktree, removes the worktree (close the editor window afterwards). Only when the local tip equals the merged commit — new commits since the merge get a fresh PR instead. Applies to work branches and release-fix/hotfix-fix.
 - **Release-fix / hotfix-fix** → creates PR to parent release/hotfix branch, title `fix: {name}` (dashes → spaces, e.g. `null-crash` → `fix: null crash`)
-- **Release** → merges to main + develop, tags, cleans up (removes its own worktree when run inside one)
-- **Hotfix** → merges to main + develop + every open `release/*`, tags, cleans up (removes its own worktree when run inside one). If a release branch already exists, the hotfix is propagated into it so the upcoming release ships the fix; the operator must then run `gflow bump` to cut a new RC for staging validation.
+- **Release** → tags the tested release tip (under `rc`), merges to main + develop, cleans up (removes its own worktree when run inside one)
+- **Hotfix** → tags the tested hotfix tip, merges to main, then every open `release/*`, then develop, cleans up (removes its own worktree when run inside one). If a release branch already exists, the hotfix is propagated into it so the upcoming release ships the fix; the operator must then run `gflow bump` to cut a new RC for staging validation.
 
 ### Resuming after a merge conflict
 
@@ -128,6 +128,8 @@ gflow bump # create next RC tag (on release/* only)
 gflow sync [--accept-merge-type] # merge release into develop (on release/* only)
 ```
 
+`gflow deploy-version [--name | --build]` prints `X.Y.Z+N` for a deploy build (read-only, no config or fetch; for build scripts). develop/work branches: next minor after the highest tag, N = 1 + first-parent commits since that line's cut. release/release-fix: latest tag of its line (rc included), N = its own first-parent commits. hotfix/hotfix-fix: `X.Y.Z`, N = commits past the mainline. Refuses on the mainline, `version/*`, `landing/*`.
+
 ### Landing modes & version script
 
 Config migration saves the replacement file before removing old Git keys. A failed save preserves those keys for retry.
@@ -136,17 +138,21 @@ Config is three layers, later overriding earlier per key: `~/.gflow/config` (you
 
 `.gflow/config` (committed file, not git config — repo policy, not per-clone): `mode=free|protected` (default `free` = today's behavior), `keep-release-branches=true|false` (default `false`; skips deleting `release/*`/`hotfix/*` on finish, work branches unaffected), `bump-strategy=rc|patch` (default `rc`; see Tag Strategy).
 
-**`mode=protected`** — `main`/`develop` require PRs. `finish`/`bump`/`sync` open (or reuse) a PR for every landing instead of merging directly, print a bare title + URL block (bold title on a TTY; also copied to the clipboard, silently skipped without a clipboard tool), and **exit 0** — gflow never merges a PR. **Re-run the same command after a human merges it.** Every landing PR's head is a throwaway `landing/<source>-into-<target>` branch gflow cuts from the source and deletes at completion. gflow merges the target into the landing branch on every run, so landing PRs are born mergeable: a conflict surfaces mid-run and **leaves the current worktree ON the landing branch**, mid-merge (gflow says so) — resolve there, `git add . && git commit --no-edit`, re-run (the re-run switches the worktree back to the source branch itself and pushes; `git merge --abort && git switch <source>` backs out). A PR that conflicts later (target moved) heals by re-running. Never rebase a landing branch; the release/hotfix branch is never touched. One PR per run, in order (main → develop → each open release branch for hotfixes). Develop/release legs are strict: a landing that predates newer source commits re-opens with a refreshed landing branch, so commits cannot silently miss a target (this also covers a mid-release `sync` followed by more release fixes). Only the last landing deletes the source branch plus all landing branches. Nothing is stored on disk to resume — progress is re-derived from PR/tag state each run. Migration: an OPEN landing PR with the release/hotfix branch as head (older gflow) is a hard error — merge or close it, then re-run. Older `finish/*` landing branches are not recognized — complete those landings with the gflow version that started them. Don't add new, unrelated work to a release branch once its `main` PR has merged (the clean tag is already placed) — ship fixes as a hotfix instead.
+**`mode=protected`** — `main`/`develop` require PRs. `finish`/`bump`/`sync` open (or reuse) a PR for every landing instead of merging directly, print a bare title + URL block (bold title on a TTY; also copied to the clipboard, silently skipped without a clipboard tool), and **exit 0** — gflow never merges a landing PR (it does complete its own `version/*` PRs). **Re-run the same command after a human merges it.** Every landing PR's head is a throwaway `landing/<source>-into-<target>` branch gflow cuts from the source and deletes at completion. gflow merges the target into the landing branch on every run, so landing PRs are born mergeable: a conflict surfaces mid-run and **leaves the current worktree ON the landing branch**, mid-merge (gflow says so) — resolve there, `git add . && git commit --no-edit`, re-run (the re-run switches the worktree back to the source branch itself and pushes; `git merge --abort && git switch <source>` backs out). A PR that conflicts later (target moved) heals by re-running. Never rebase a landing branch; the release/hotfix branch is never touched. One PR per run, in order (main → each open release branch for hotfixes → develop). A new landing branch always gets its target merged in, also when that changes nothing. Develop/release legs are strict: a landing that predates newer source commits re-opens with a refreshed landing branch, so commits cannot silently miss a target (this also covers a mid-release `sync` followed by more release fixes). Only the last landing deletes the source branch plus all landing branches. Nothing is stored on disk to resume — progress is re-derived from PR/tag state each run. Migration: an OPEN landing PR with the release/hotfix branch as head (older gflow) is a hard error — merge or close it, then re-run. Older `finish/*` landing branches are not recognized — complete those landings with the gflow version that started them. Don't add new, unrelated work to a release branch once its `main` PR has merged (the clean tag already sits on the tested tip) — ship fixes as a hotfix instead.
 
-`bump` may print a version-PR title + URL block and defer the RC tag when a version-script commit needs its own PR on an already-pushed release branch — re-run `gflow bump` after that PR merges; it tags the **PR's merge commit**, it does not re-run the script.
+Protected mode puts every version change (release cut, `bump` under `patch`, hotfix start) on a version PR that gflow merges at once and tags on its squash commit in the same run. If it cannot merge yet, it turns on auto-complete and the tag waits: re-run `gflow bump` after that PR merges; it tags the **PR's merge commit**, it does not re-run the script (a deferred cut's first tag still fires `release-start`).
 
-**Version script** (`.gflow/set-version.sh` / `.gflow/set-version.cmd`, platform-picked; both missing = feature off): runs with the clean `X.Y.Z` at release/hotfix branch creation, the post-release develop bump, and `bump`; commits `chore: set version {v}` only if it changed files. Requires a clean tree first. Under `bump-strategy=patch` each `bump` passes the **newly incremented** `X.Y.Z` (so the script commits every bump); under `rc` it gets the constant `X.Y.0`.
+**Version script** (`.gflow/set-version.sh` / `.gflow/set-version.cmd`, platform-picked; both missing = feature off): runs with the clean `X.Y.Z` at release/hotfix branch creation and `bump` (develop never gets a version bump); commits `chore: set version {v}` only if it changed files. Requires a clean tree first. Under `bump-strategy=patch` each `bump` passes the **newly incremented** `X.Y.Z` (so the script commits every bump); under `rc` it gets the constant `X.Y.0`.
 
-`chore/set-version-{v}` and `release-chore/{v}/set-version` are **gflow-created** — merge their PR, never commit to them. `chore/set-version-*` is also excluded from `finish`'s PR-target candidates (it gets merged and deleted out from under a PR that targeted it). A `release-chore/*` branch finishes like `release-fix` (PR into its release branch, no `--base`).
+`version/{v}-into-release-{X.Y.0}` and `version/{v}-into-hotfix-{v}` (protected mode only) are **gflow-created and gflow-completed**: gflow merges at once with squash, else turns on auto-complete, else warns and leaves the merge to a human (never an error). Never commit to them; `finish` does not recognize them and never offers them as a PR target. `release-chore/*` is no longer recognized.
 
-**Papercut**: version files can conflict on merge (hotfix vs. develop, major release vs. develop) — resolve manually, gflow does not auto-resolve. In protected mode it surfaces while gflow merges the target into the `landing/*` branch: resolve there mid-run, never on the source branch.
+**Papercut**: version files can conflict on merge (mostly a hotfix landing on an open release; keep the release's version) — resolve manually, gflow does not auto-resolve. In protected mode it surfaces while gflow merges the target into the `landing/*` branch: resolve there mid-run, never on the source branch.
 
 `--no-checkout` hotfix creation skips the script (HEAD isn't on the new branch) and warns with the manual recovery steps.
+
+### Hooks
+
+`.gflow/config` (committed file only; other layers are ignored with a warning) may set `hook-release-start=`, `hook-release-bump=`, `hook-release-finish=`, `hook-hotfix-finish=` to a shell command. A key may repeat: commands run in file order, each once; a failing one does not stop the next. An unknown `hook-*` key is an error. Each event fires after it is fully done (tag pushed, finish completed; under `patch` a release finish fires with the existing final tag). Never for work-branch finishes, `sync`, or a protected finish still waiting on a PR. Commands run via `sh -c` in the main tree root with `GFLOW_EVENT`, `GFLOW_TAG`, `GFLOW_TAG_KIND` (`rc`|`final`), `GFLOW_BRANCH`, `GFLOW_REMOTE`, stdio inherited. First run of a command (or changed text) asks `Run this hook? [y/N]`; approvals live in `~/.gflow/hook-approvals`. **No terminal = unapproved commands are skipped**, so an agent must not expect a hook to run until a human approved it once. At most once per command, event, and tag (ledger in `.git/gflow-hooks/`); the next gflow run fires anything a crash left pending. A failing hook leaves the flow done, prints a rerun line, and exits non-zero — do not re-run `finish`/`bump` for it; run the printed line. `--no-hooks` on `start release`, `bump`, `finish` skips them for good.
 
 ### Tag Strategy
 
@@ -156,7 +162,8 @@ Selected per repo via `bump-strategy` in `.gflow/config`. gflow writes `v`-prefi
 
 - **Release start** → `v{X}.{Y}.0-rc.1` (RC tag — triggers staging deploy)
 - **Bump version** → `v{X}.{Y}.0-rc.{N+1}` (next RC — triggers staging deploy)
-- **Finish release** → `v{X}.{Y}.0` (clean tag — triggers production deploy)
+- **Bump version** under `rc` changes no version: it only tags the tip
+- **Finish release** → `v{X}.{Y}.0` (clean tag on the tested release tip, before any merge — triggers production deploy)
 
 CI systems filter on `v*-rc.*` for staging and clean `v*` (no hyphen) for production.
 
@@ -171,7 +178,7 @@ No tag-shape staging/production split exists under `patch`: CI must gate product
 
 **Both strategies:**
 
-- **Finish hotfix** → `v{X}.{Y}.{Z}` (clean tag at finish, both strategies)
+- **Finish hotfix** → `v{X}.{Y}.{Z}` (clean tag on the tested hotfix tip at finish, before any merge, both strategies)
 - **Guard:** `gflow finish` rejects a release branch if HEAD is past the latest RC/patch tag — prevents promoting unstaged commits to production. Fix by running `gflow bump` and waiting for staging.
 
 ### When to use `--base`
@@ -204,8 +211,8 @@ Not available for `start release`.
 | `refactor/{name}` | develop | develop (PR) |
 | `release/{major}.{minor}.{patch}` | develop | main + develop |
 | `release-fix/{v}/{name}` | release/{v} | release/{v} (PR) |
-| `release-chore/{v}/set-version` | release/{v} (gflow-created) | release/{v} (PR) |
-| `hotfix/{major}.{minor}.{patch}` | main | main + develop + open `release/*` |
+| `version/{v}-into-{target}` | release/{v} or hotfix/{v} (gflow-created) | the same branch (PR, gflow-completed) |
+| `hotfix/{major}.{minor}.{patch}` | main | main + open `release/*` + develop |
 | `hotfix-fix/{v}/{name}` | hotfix/{v} | hotfix/{v} (PR) |
 
 ## Non-Interactive Environments (AI agents, CI, scripts)

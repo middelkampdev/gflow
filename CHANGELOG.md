@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0] - 2026-10-18
+
+### Changed
+- **Breaking:** `gflow start release` no longer bumps `develop` to the next minor version. `develop` keeps the version of the last release or hotfix that landed on it, so landing on `develop` no longer conflicts on the version file. Use `gflow deploy-version` for a develop build's version.
+- **Breaking:** the clean release tag (under `rc`) and the hotfix tag now sit on the release or hotfix tip, the exact commit that was tested, and `gflow finish` cuts and pushes them before any merge. They used to sit on `main`'s merge commit. Under `rc`, `vX.Y.0` sits on the same commit as the last `-rc.N`. A tag an older gflow cut on `main` is still accepted on a re-run.
+- **Breaking:** protected mode puts every version change on a version branch: the release cut (`version/X.Y.0-into-release-X.Y.0`), `gflow bump` under `patch`, and the hotfix start (`version/X.Y.Z-into-hotfix-X.Y.Z`). gflow pushes the release or hotfix branch first. A new hotfix gets no tag at start.
+- **Breaking:** protected-mode version PR branches are named `version/<version>-into-<target>` (they were `chore/set-version-X.Y.Z` and `release-chore/X.Y.0/set-version`), and gflow completes these PRs itself and deletes their branch. `release-chore/*` branches are no longer recognized: merge or close their PRs before you upgrade.
+- Version PRs are merged at once with squash, so the tag sits on the squash commit in the same run. Auto-complete is now the fallback when the platform will not merge yet; the tag then waits for a re-run of `gflow bump`.
+- A hotfix lands on `main`, then on each open release, then on `develop` (it used to land on `develop` before the releases), in free and protected mode.
+- Protected mode: a new landing branch always gets its target merged in, also when that changes nothing, so every landing looks the same.
+- The first tag of a release fires `release-start` also when a deferred cut cuts it on `gflow bump`.
+
+### Added
+- `gflow deploy-version [--name | --build]` prints the version of a deploy build from the current branch as `X.Y.Z+N`, for build scripts. `develop` and its work branches print the next minor after the highest tag; a release prints its latest tag; a hotfix prints its own version. `N` counts the branch's own first-parent commits. It only reads: no config, prompts, hosting calls, or fetch.
+- Event hooks. A repo declares commands in `.gflow/config` with `hook-release-start`, `hook-release-bump`, `hook-release-finish` and `hook-hotfix-finish`, and gflow runs them after that event is done: tag pushed, finish completed. A key may repeat, so a backend and an app in one repo can both react to the same event; the commands run in file order, and a failing one does not stop the next. Each command runs through the shell in the repository root with `GFLOW_EVENT`, `GFLOW_TAG`, `GFLOW_TAG_KIND`, `GFLOW_BRANCH` and `GFLOW_REMOTE`. Under `bump-strategy=patch`, a release finish fires with the existing final tag.
+- Hook commands run at most once per event and tag. If gflow stops after the event but before or between its commands, the next gflow run in the repository runs the commands that did not run yet.
+- gflow asks `Run this hook? [y/N]` before it runs a hook command for the first time, and again when the command changes. Approvals are kept in `~/.gflow/hook-approvals`. Without a terminal, an unapproved command is skipped with one line of output.
+- `--no-hooks` on `gflow start release`, `gflow bump` and `gflow finish` skips the hook commands of that run and prints each one as a rerun command.
+- When a hook command fails, the release or hotfix stays done. gflow prints the exit code and the exact rerun command, and exits non-zero.
+
+### Fixed
+- Protected mode: `gflow finish` on a release or hotfix no longer completes while its later commits miss `develop` (or an open release). When a landing into that branch had merged before the source gained commits, gflow refreshes the landing branch. If that refresh hit a conflict, the re-run after you resolved it deleted the branches and printed "complete" without pushing the resolution or opening the fresh PR. The same happened on a re-run while the fresh PR was still open. gflow now treats a leg as landed only when the merged PR itself contains the source tip, so it pushes the refreshed landing branch, opens the fresh PR and waits for it.
+
 ## [5.1.0] - 2026-10-13
 
 ### Changed
@@ -293,6 +316,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-platform CI/CD with GitHub Actions (macOS x86_64, macOS ARM64, Windows)
 - README with mermaid diagrams documenting the branch model and workflows
 
+[6.0.0]: https://github.com/jopmiddelkamp/gflow/compare/v5.1.0...v6.0.0
 [5.1.0]: https://github.com/jopmiddelkamp/gflow/compare/v5.0.0...v5.1.0
 [5.0.0]: https://github.com/jopmiddelkamp/gflow/compare/v4.6.0...v5.0.0
 [4.6.0]: https://github.com/jopmiddelkamp/gflow/compare/v4.5.0...v4.6.0

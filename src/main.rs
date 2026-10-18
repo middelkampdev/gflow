@@ -1,3 +1,4 @@
+use std::io::IsTerminal;
 use std::process::{Command, ExitCode};
 
 use clap::Parser;
@@ -8,11 +9,14 @@ use gflow::git::Git;
 use gflow::hosting::detect::{self, Provider};
 use gflow::hosting::devops::AzureDevOps;
 use gflow::hosting::github::GitHub;
+use gflow::hooks::{self, HookEnv, ShellHook};
 use gflow::hosting::{HostingPlatform, SystemCli};
 use gflow::lifecycle;
 use gflow::menu::MenuPrompter;
 use gflow::editor::CommandEditor;
 use gflow::init;
+use gflow::flows::deploy_version::{deploy_version, DeployPart};
+use gflow::mainline;
 use gflow::version_script::{self, ScriptCli, VersionScript};
 use gflow::repo_config;
 use gflow::worktree::{self, WorktreeConfig, WorktreeEnv};
@@ -69,7 +73,7 @@ fn run(command: Option<Commands>) -> Result<(), String> {
     };
 
     // Provider detection reads the origin remote, so the repo check comes first.
-    git.current_branch().map_err(|_| "Not in a git repository.".to_string())?;
+    let current_branch = git.current_branch().map_err(|_| "Not in a git repository.".to_string())?;
 
     // Eager resolve: a platform-mismatched committed script errors on every
     // command, not just release/hotfix ones. Accepted — it surfaces the
@@ -78,11 +82,19 @@ fn run(command: Option<Commands>) -> Result<(), String> {
     if let Some(Commands::Init) = command {
         return init::run(&MenuPrompter, &root);
     }
+    // A build script asks for its version: read-only, so no config, prompts,
+    // hosting, or fetch.
+    if let Some(Commands::DeployVersion { name, build }) = command {
+        let main_branch = mainline::resolve_main_branch(&git)?;
+        println!("{}", deploy_version(&git, &current_branch, &main_branch, DeployPart::from_flags(name, build))?);
+        return Ok(());
+    }
     let layers = init::ensure(&MenuPrompter, home.as_deref(), &root, command.is_none())?;
     for warning in &layers.warnings {
         eprintln!("Warning: {warning}");
     }
     let wt_config = WorktreeConfig::from_settings(&layers.settings);
+    let hook_commands = layers.settings.hooks.clone().unwrap_or_default();
     let repo_cfg = layers.settings.resolve();
     let script_path = version_script::resolve(&root)?;
     let script = script_path.map(|path| ScriptCli::new(path, root.clone()));
@@ -100,12 +112,19 @@ fn run(command: Option<Commands>) -> Result<(), String> {
         commands: setup_commands.as_ref(),
     };
     let prompter = MenuPrompter;
+    let hook_env = HookEnv {
+        commands: hook_commands,
+        shell: &ShellHook,
+        interactive: std::io::stdin().is_terminal(),
+        approvals_file: home.as_ref().map(|home| home.join(".gflow").join(hooks::APPROVALS_FILE)),
+    };
 
     lifecycle::run(
         &git,
         &*hosting,
         &prompter,
         &worktree_env,
+        &hook_env,
         &repo_cfg,
         script.as_ref().map(|s| s as &dyn VersionScript),
         command,
