@@ -1,8 +1,13 @@
 [package]
 name = "gflow"
-version = "6.1.0"
+version = "6.2.0"
 edition = "2021"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.28"
+
+# Dev tooling only. The root package stays the default member, so `cargo build`,
+# `cargo install` and the coverage gate never see xtask or its dependencies.
+[workspace]
+members = ["xtask"]

@@ -169,7 +169,7 @@ svg text { font-family: var(--mono); }
     </div>
   </section>
 
-  <div class="note"><p><b>This page is the spec.</b> It is rendered from <code>spec/cycles/*.json</code>, one file per settings combination, by <code>python3 spec/render.py</code>. Edit the JSON, then render. gflow follows it in every combination: <code>python3 spec/check.py</code> replays every action with the real binary and compares.</p><ul id="rules"></ul></div>
+  <div class="note"><p><b>This page is the spec.</b> It is rendered from <code>spec/cycles/*.json</code>, one file per settings combination, by <code>cargo xtask render</code>. Edit the JSON, then render. gflow follows it in every combination: <code>cargo xtask check</code> replays every action with the real binary and compares.</p><ul id="rules"></ul></div>
 </div>
 
 <script type="application/json" id="cycles">{{CYCLES_JSON}}</script>
@@ -462,7 +462,7 @@ $('landingToggle').addEventListener('change', e => {
   layout(); render();
 });
 
-// ---------- Cycles, built in by spec/render.py ----------
+// ---------- Cycles, built in by cargo xtask render ----------
 // The settings switch is built from the "settings" of every cycle, so a new
 // file in spec/cycles/ shows up here without a page change.
 const cycles = JSON.parse($('cycles').textContent);

@@ -177,15 +177,20 @@ them. A principle you did not run is a principle you did not apply.
 ## Branch-flow spec
 
 Change the spec first: `spec/cycles/*.json`, one file per `.gflow/config`
-combination, rendered into `spec/replay.html` by `python3 spec/render.py`.
+combination, rendered into `spec/replay.html` by `cargo xtask render`.
 Change gflow after the spec is agreed. Never edit `spec/replay.html` by hand.
 
-`python3 spec/check.py [cycle ...]` proves gflow follows the spec: it replays
-every action's `run` (on its `on` branch) with the real release binary on a
-fake Azure DevOps remote in a temp dir, and names the first action whose ops,
-flag, or `deploy-version` output differ. It uses real git, so it is a dev tool
-and a CI job, never part of `cargo test`. Do not run two at once in one
-checkout's `target/`.
+`cargo xtask check [--gflow PATH] [cycle ...]` proves gflow follows the spec:
+it replays every action's `run` (on its `on` branch) with the real release
+binary on a fake Azure DevOps remote in a temp dir, and names the first action
+whose ops, flag, or `deploy-version` output differ. It uses real git, so it is a
+dev tool and a CI job, never part of `cargo test` (only its pure helpers are).
+Do not run two at once in one checkout's `target/`.
+
+Both commands live in `xtask/`, a workspace member that never ships. Keep the
+repository Rust-only: new tooling goes there, not into a script. The exceptions
+are forced by outside tools: the Stop hook (Bash, it must run when the build is
+broken), Chocolatey's PowerShell, the replay page's JavaScript, and CI YAML.
 
 ## Documentation Sync
 
