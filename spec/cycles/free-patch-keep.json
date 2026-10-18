@@ -24,6 +24,9 @@
   {
    "phase": "Reset",
    "actor": "tool",
+   "run": {
+    "reset": {}
+   },
    "deployVersions": {
     "develop": "0.1.0+1"
    },
@@ -49,6 +52,16 @@
   {
    "phase": "Develop work",
    "actor": "gflow",
+   "on": "develop",
+   "run": {
+    "gflow": [
+     "start",
+     "feature",
+     "--name",
+     "login",
+     "--no-worktree"
+    ]
+   },
    "deployVersions": {
     "develop": "0.1.0+1",
     "feature/login": "0.1.0+1"
@@ -70,6 +83,13 @@
   {
    "phase": "Develop work",
    "actor": "dev",
+   "on": "feature/login",
+   "run": {
+    "commit": {
+     "path": "features/login.txt",
+     "message": "feat: login"
+    }
+   },
    "deployVersions": {
     "develop": "0.1.0+1",
     "feature/login": "0.1.0+2"
@@ -92,6 +112,16 @@
   {
    "phase": "Develop work",
    "actor": "gflow",
+   "on": "develop",
+   "run": {
+    "gflow": [
+     "start",
+     "feature",
+     "--name",
+     "search",
+     "--no-worktree"
+    ]
+   },
    "deployVersions": {
     "develop": "0.1.0+1",
     "feature/login": "0.1.0+2",
@@ -114,6 +144,13 @@
   {
    "phase": "Develop work",
    "actor": "dev",
+   "on": "feature/search",
+   "run": {
+    "commit": {
+     "path": "features/search.txt",
+     "message": "feat: search"
+    }
+   },
    "deployVersions": {
     "develop": "0.1.0+1",
     "feature/login": "0.1.0+2",
@@ -137,6 +174,15 @@
   {
    "phase": "Develop work",
    "actor": "gflow",
+   "on": "feature/login",
+   "run": {
+    "gflow": [
+     "finish",
+     "--base",
+     "develop",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.1.0+1",
     "feature/login": "0.1.0+2",
@@ -144,7 +190,7 @@
    },
    "frames": [
     {
-     "cmd": "gflow finish",
+     "cmd": "gflow finish --base develop --breaking=false",
      "text": "PR #1 opens: feature/login into develop (SQUASH).",
      "ops": [
       {
@@ -161,6 +207,12 @@
   {
    "phase": "Develop work",
    "actor": "reviewer",
+   "run": {
+    "merge": {
+     "pr": 1,
+     "method": "squash"
+    }
+   },
    "deployVersions": {
     "develop": "0.1.0+2",
     "feature/login": "0.1.0+2",
@@ -189,13 +241,22 @@
   {
    "phase": "Develop work",
    "actor": "gflow",
+   "on": "feature/login",
+   "run": {
+    "gflow": [
+     "finish",
+     "--base",
+     "develop",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.1.0+2",
     "feature/search": "0.1.0+2"
    },
    "frames": [
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish --base develop --breaking=false   # re-run",
      "text": "feature/login is deleted.",
      "ops": [
       {
@@ -209,13 +270,22 @@
   {
    "phase": "Develop work",
    "actor": "gflow",
+   "on": "feature/search",
+   "run": {
+    "gflow": [
+     "finish",
+     "--base",
+     "develop",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.1.0+2",
     "feature/search": "0.1.0+2"
    },
    "frames": [
     {
-     "cmd": "gflow finish",
+     "cmd": "gflow finish --base develop --breaking=false",
      "text": "PR #2 opens: feature/search into develop (SQUASH).",
      "ops": [
       {
@@ -232,6 +302,12 @@
   {
    "phase": "Develop work",
    "actor": "reviewer",
+   "run": {
+    "merge": {
+     "pr": 2,
+     "method": "squash"
+    }
+   },
    "deployVersions": {
     "develop": "0.1.0+3",
     "feature/search": "0.1.0+2"
@@ -259,12 +335,21 @@
   {
    "phase": "Develop work",
    "actor": "gflow",
+   "on": "feature/search",
+   "run": {
+    "gflow": [
+     "finish",
+     "--base",
+     "develop",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.1.0+3"
    },
    "frames": [
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish --base develop --breaking=false   # re-run",
      "text": "feature/search is deleted.",
      "ops": [
       {
@@ -278,6 +363,15 @@
   {
    "phase": "Release 0.1.0",
    "actor": "gflow",
+   "on": "develop",
+   "run": {
+    "gflow": [
+     "start",
+     "release",
+     "--minor",
+     "--no-worktree"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+1",
     "release/0.1.0": "0.1.0+1"
@@ -317,6 +411,16 @@
   {
    "phase": "Release 0.1.0",
    "actor": "gflow",
+   "on": "release/0.1.0",
+   "run": {
+    "gflow": [
+     "start",
+     "release-fix",
+     "--name",
+     "crash",
+     "--no-worktree"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+1",
     "release-fix/0.1.0/crash": "0.1.0+1",
@@ -339,6 +443,13 @@
   {
    "phase": "Release 0.1.0",
    "actor": "dev",
+   "on": "release-fix/0.1.0/crash",
+   "run": {
+    "commit": {
+     "path": "fixes/crash.txt",
+     "message": "fix: crash"
+    }
+   },
    "deployVersions": {
     "develop": "0.2.0+1",
     "release-fix/0.1.0/crash": "0.1.0+2",
@@ -362,6 +473,13 @@
   {
    "phase": "Release 0.1.0",
    "actor": "gflow",
+   "on": "release-fix/0.1.0/crash",
+   "run": {
+    "gflow": [
+     "finish",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+1",
     "release-fix/0.1.0/crash": "0.1.0+2",
@@ -369,7 +487,7 @@
    },
    "frames": [
     {
-     "cmd": "gflow finish",
+     "cmd": "gflow finish --breaking=false",
      "text": "PR #3 opens: release-fix/0.1.0/crash into release/0.1.0 (SQUASH).",
      "ops": [
       {
@@ -386,6 +504,12 @@
   {
    "phase": "Release 0.1.0",
    "actor": "reviewer",
+   "run": {
+    "merge": {
+     "pr": 3,
+     "method": "squash"
+    }
+   },
    "deployVersions": {
     "develop": "0.2.0+1",
     "release-fix/0.1.0/crash": "0.1.0+2",
@@ -414,13 +538,20 @@
   {
    "phase": "Release 0.1.0",
    "actor": "gflow",
+   "on": "release-fix/0.1.0/crash",
+   "run": {
+    "gflow": [
+     "finish",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+1",
     "release/0.1.0": "0.1.0+2"
    },
    "frames": [
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish --breaking=false   # re-run",
      "text": "release-fix/0.1.0/crash is deleted.",
      "ops": [
       {
@@ -434,6 +565,12 @@
   {
    "phase": "Release 0.1.0",
    "actor": "gflow",
+   "on": "release/0.1.0",
+   "run": {
+    "gflow": [
+     "bump"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+1",
     "release/0.1.0": "0.1.1+3"
@@ -468,6 +605,12 @@
   {
    "phase": "Release 0.1.0",
    "actor": "gflow",
+   "on": "release/0.1.0",
+   "run": {
+    "gflow": [
+     "sync"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+2",
     "release/0.1.0": "0.1.1+3"
@@ -491,6 +634,16 @@
   {
    "phase": "Release 0.1.0",
    "actor": "gflow",
+   "on": "release/0.1.0",
+   "run": {
+    "gflow": [
+     "start",
+     "release-fix",
+     "--name",
+     "typo",
+     "--no-worktree"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+2",
     "release-fix/0.1.0/typo": "0.1.1+3",
@@ -513,6 +666,13 @@
   {
    "phase": "Release 0.1.0",
    "actor": "dev",
+   "on": "release-fix/0.1.0/typo",
+   "run": {
+    "commit": {
+     "path": "fixes/typo.txt",
+     "message": "fix: typo"
+    }
+   },
    "deployVersions": {
     "develop": "0.2.0+2",
     "release-fix/0.1.0/typo": "0.1.1+4",
@@ -536,6 +696,13 @@
   {
    "phase": "Release 0.1.0",
    "actor": "gflow",
+   "on": "release-fix/0.1.0/typo",
+   "run": {
+    "gflow": [
+     "finish",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+2",
     "release-fix/0.1.0/typo": "0.1.1+4",
@@ -543,7 +710,7 @@
    },
    "frames": [
     {
-     "cmd": "gflow finish",
+     "cmd": "gflow finish --breaking=false",
      "text": "PR #4 opens: release-fix/0.1.0/typo into release/0.1.0 (SQUASH).",
      "ops": [
       {
@@ -560,6 +727,12 @@
   {
    "phase": "Release 0.1.0",
    "actor": "reviewer",
+   "run": {
+    "merge": {
+     "pr": 4,
+     "method": "squash"
+    }
+   },
    "deployVersions": {
     "develop": "0.2.0+2",
     "release-fix/0.1.0/typo": "0.1.1+4",
@@ -588,13 +761,20 @@
   {
    "phase": "Release 0.1.0",
    "actor": "gflow",
+   "on": "release-fix/0.1.0/typo",
+   "run": {
+    "gflow": [
+     "finish",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+2",
     "release/0.1.0": "0.1.1+4"
    },
    "frames": [
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish --breaking=false   # re-run",
      "text": "release-fix/0.1.0/typo is deleted.",
      "ops": [
       {
@@ -608,6 +788,12 @@
   {
    "phase": "Release 0.1.0",
    "actor": "gflow",
+   "on": "release/0.1.0",
+   "run": {
+    "gflow": [
+     "finish"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+2",
     "release/0.1.0": "0.1.1+4"
@@ -624,6 +810,12 @@
   {
    "phase": "Release 0.1.0",
    "actor": "gflow",
+   "on": "release/0.1.0",
+   "run": {
+    "gflow": [
+     "bump"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+2",
     "release/0.1.0": "0.1.2+5"
@@ -658,6 +850,12 @@
   {
    "phase": "Release 0.1.0",
    "actor": "gflow",
+   "on": "release/0.1.0",
+   "run": {
+    "gflow": [
+     "finish"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+3",
     "release/0.1.0": "0.1.2+5"
@@ -696,6 +894,16 @@
   {
    "phase": "Develop work 2",
    "actor": "gflow",
+   "on": "develop",
+   "run": {
+    "gflow": [
+     "start",
+     "feature",
+     "--name",
+     "profile",
+     "--no-worktree"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+3",
     "feature/profile": "0.2.0+3",
@@ -718,6 +926,13 @@
   {
    "phase": "Develop work 2",
    "actor": "dev",
+   "on": "feature/profile",
+   "run": {
+    "commit": {
+     "path": "features/profile.txt",
+     "message": "feat: profile"
+    }
+   },
    "deployVersions": {
     "develop": "0.2.0+3",
     "feature/profile": "0.2.0+4",
@@ -741,6 +956,15 @@
   {
    "phase": "Develop work 2",
    "actor": "gflow",
+   "on": "feature/profile",
+   "run": {
+    "gflow": [
+     "finish",
+     "--base",
+     "develop",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+3",
     "feature/profile": "0.2.0+4",
@@ -748,7 +972,7 @@
    },
    "frames": [
     {
-     "cmd": "gflow finish",
+     "cmd": "gflow finish --base develop --breaking=false",
      "text": "PR #5 opens: feature/profile into develop (SQUASH).",
      "ops": [
       {
@@ -765,6 +989,12 @@
   {
    "phase": "Develop work 2",
    "actor": "reviewer",
+   "run": {
+    "merge": {
+     "pr": 5,
+     "method": "squash"
+    }
+   },
    "deployVersions": {
     "develop": "0.2.0+4",
     "feature/profile": "0.2.0+4",
@@ -793,13 +1023,22 @@
   {
    "phase": "Develop work 2",
    "actor": "gflow",
+   "on": "feature/profile",
+   "run": {
+    "gflow": [
+     "finish",
+     "--base",
+     "develop",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+4",
     "release/0.1.0": "0.1.2+5"
    },
    "frames": [
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish --base develop --breaking=false   # re-run",
      "text": "feature/profile is deleted.",
      "ops": [
       {
@@ -813,6 +1052,16 @@
   {
    "phase": "Hotfix 0.1.3",
    "actor": "gflow",
+   "on": "main",
+   "run": {
+    "gflow": [
+     "start",
+     "hotfix-fix",
+     "--name",
+     "security",
+     "--no-worktree"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+4",
     "hotfix-fix/0.1.3/security": "0.1.3+1",
@@ -847,6 +1096,13 @@
   {
    "phase": "Hotfix 0.1.3",
    "actor": "dev",
+   "on": "hotfix-fix/0.1.3/security",
+   "run": {
+    "commit": {
+     "path": "fixes/security.txt",
+     "message": "fix: security"
+    }
+   },
    "deployVersions": {
     "develop": "0.2.0+4",
     "hotfix-fix/0.1.3/security": "0.1.3+2",
@@ -871,6 +1127,13 @@
   {
    "phase": "Hotfix 0.1.3",
    "actor": "gflow",
+   "on": "hotfix-fix/0.1.3/security",
+   "run": {
+    "gflow": [
+     "finish",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+4",
     "hotfix-fix/0.1.3/security": "0.1.3+2",
@@ -879,7 +1142,7 @@
    },
    "frames": [
     {
-     "cmd": "gflow finish",
+     "cmd": "gflow finish --breaking=false",
      "text": "PR #6 opens: hotfix-fix/0.1.3/security into hotfix/0.1.3 (SQUASH).",
      "ops": [
       {
@@ -896,6 +1159,12 @@
   {
    "phase": "Hotfix 0.1.3",
    "actor": "reviewer",
+   "run": {
+    "merge": {
+     "pr": 6,
+     "method": "squash"
+    }
+   },
    "deployVersions": {
     "develop": "0.2.0+4",
     "hotfix-fix/0.1.3/security": "0.1.3+2",
@@ -925,6 +1194,13 @@
   {
    "phase": "Hotfix 0.1.3",
    "actor": "gflow",
+   "on": "hotfix-fix/0.1.3/security",
+   "run": {
+    "gflow": [
+     "finish",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+4",
     "hotfix/0.1.3": "0.1.3+2",
@@ -932,7 +1208,7 @@
    },
    "frames": [
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish --breaking=false   # re-run",
      "text": "hotfix-fix/0.1.3/security is deleted.",
      "ops": [
       {
@@ -946,6 +1222,12 @@
   {
    "phase": "Hotfix 0.1.3",
    "actor": "gflow",
+   "on": "hotfix/0.1.3",
+   "run": {
+    "gflow": [
+     "finish"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+5",
     "hotfix/0.1.3": "0.1.3+2",
@@ -990,6 +1272,16 @@
   {
    "phase": "Develop work 3",
    "actor": "gflow",
+   "on": "develop",
+   "run": {
+    "gflow": [
+     "start",
+     "feature",
+     "--name",
+     "export",
+     "--no-worktree"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+5",
     "feature/export": "0.2.0+5",
@@ -1013,6 +1305,13 @@
   {
    "phase": "Develop work 3",
    "actor": "dev",
+   "on": "feature/export",
+   "run": {
+    "commit": {
+     "path": "features/export.txt",
+     "message": "feat: export"
+    }
+   },
    "deployVersions": {
     "develop": "0.2.0+5",
     "feature/export": "0.2.0+6",
@@ -1037,6 +1336,15 @@
   {
    "phase": "Develop work 3",
    "actor": "gflow",
+   "on": "feature/export",
+   "run": {
+    "gflow": [
+     "finish",
+     "--base",
+     "develop",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+5",
     "feature/export": "0.2.0+6",
@@ -1045,7 +1353,7 @@
    },
    "frames": [
     {
-     "cmd": "gflow finish",
+     "cmd": "gflow finish --base develop --breaking=false",
      "text": "PR #7 opens: feature/export into develop (SQUASH).",
      "ops": [
       {
@@ -1062,6 +1370,12 @@
   {
    "phase": "Develop work 3",
    "actor": "reviewer",
+   "run": {
+    "merge": {
+     "pr": 7,
+     "method": "squash"
+    }
+   },
    "deployVersions": {
     "develop": "0.2.0+6",
     "feature/export": "0.2.0+6",
@@ -1091,6 +1405,15 @@
   {
    "phase": "Develop work 3",
    "actor": "gflow",
+   "on": "feature/export",
+   "run": {
+    "gflow": [
+     "finish",
+     "--base",
+     "develop",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.2.0+6",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1098,7 +1421,7 @@
    },
    "frames": [
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish --base develop --breaking=false   # re-run",
      "text": "feature/export is deleted.",
      "ops": [
       {
@@ -1112,6 +1435,15 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "gflow",
+   "on": "develop",
+   "run": {
+    "gflow": [
+     "start",
+     "release",
+     "--minor",
+     "--no-worktree"
+    ]
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1153,6 +1485,16 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "gflow",
+   "on": "release/0.2.0",
+   "run": {
+    "gflow": [
+     "start",
+     "release-fix",
+     "--name",
+     "layout",
+     "--no-worktree"
+    ]
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1177,6 +1519,13 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "dev",
+   "on": "release-fix/0.2.0/layout",
+   "run": {
+    "commit": {
+     "path": "fixes/layout.txt",
+     "message": "fix: layout"
+    }
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1202,6 +1551,13 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "gflow",
+   "on": "release-fix/0.2.0/layout",
+   "run": {
+    "gflow": [
+     "finish",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1211,7 +1567,7 @@
    },
    "frames": [
     {
-     "cmd": "gflow finish",
+     "cmd": "gflow finish --breaking=false",
      "text": "PR #8 opens: release-fix/0.2.0/layout into release/0.2.0 (SQUASH).",
      "ops": [
       {
@@ -1228,6 +1584,12 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "reviewer",
+   "run": {
+    "merge": {
+     "pr": 8,
+     "method": "squash"
+    }
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1258,6 +1620,13 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "gflow",
+   "on": "release-fix/0.2.0/layout",
+   "run": {
+    "gflow": [
+     "finish",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1266,7 +1635,7 @@
    },
    "frames": [
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish --breaking=false   # re-run",
      "text": "release-fix/0.2.0/layout is deleted.",
      "ops": [
       {
@@ -1280,6 +1649,16 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "gflow",
+   "on": "main",
+   "run": {
+    "gflow": [
+     "start",
+     "hotfix-fix",
+     "--name",
+     "payment",
+     "--no-worktree"
+    ]
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix-fix/0.1.4/payment": "0.1.4+1",
@@ -1316,6 +1695,13 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "dev",
+   "on": "hotfix-fix/0.1.4/payment",
+   "run": {
+    "commit": {
+     "path": "fixes/payment.txt",
+     "message": "fix: payment"
+    }
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix-fix/0.1.4/payment": "0.1.4+2",
@@ -1342,6 +1728,13 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "gflow",
+   "on": "hotfix-fix/0.1.4/payment",
+   "run": {
+    "gflow": [
+     "finish",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix-fix/0.1.4/payment": "0.1.4+2",
@@ -1352,7 +1745,7 @@
    },
    "frames": [
     {
-     "cmd": "gflow finish",
+     "cmd": "gflow finish --breaking=false",
      "text": "PR #9 opens: hotfix-fix/0.1.4/payment into hotfix/0.1.4 (SQUASH).",
      "ops": [
       {
@@ -1369,6 +1762,12 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "reviewer",
+   "run": {
+    "merge": {
+     "pr": 9,
+     "method": "squash"
+    }
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix-fix/0.1.4/payment": "0.1.4+2",
@@ -1400,6 +1799,13 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "gflow",
+   "on": "hotfix-fix/0.1.4/payment",
+   "run": {
+    "gflow": [
+     "finish",
+     "--breaking=false"
+    ]
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1409,7 +1815,7 @@
    },
    "frames": [
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish --breaking=false   # re-run",
      "text": "hotfix-fix/0.1.4/payment is deleted.",
      "ops": [
       {
@@ -1423,6 +1829,12 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "gflow",
+   "on": "hotfix/0.1.4",
+   "run": {
+    "gflow": [
+     "finish"
+    ]
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1455,6 +1867,10 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "dev",
+   "on": "release/0.2.0",
+   "run": {
+    "resolve": {}
+   },
    "deployVersions": {
     "develop": "0.3.0+1",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1473,6 +1889,12 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "gflow",
+   "on": "hotfix/0.1.4",
+   "run": {
+    "gflow": [
+     "finish"
+    ]
+   },
    "deployVersions": {
     "develop": "0.3.0+2",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1513,6 +1935,12 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "gflow",
+   "on": "release/0.2.0",
+   "run": {
+    "gflow": [
+     "finish"
+    ]
+   },
    "deployVersions": {
     "develop": "0.3.0+2",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1532,6 +1960,12 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "gflow",
+   "on": "release/0.2.0",
+   "run": {
+    "gflow": [
+     "bump"
+    ]
+   },
    "deployVersions": {
     "develop": "0.3.0+2",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1569,6 +2003,12 @@
   {
    "phase": "Release 0.2.0 + hotfix",
    "actor": "gflow",
+   "on": "release/0.2.0",
+   "run": {
+    "gflow": [
+     "finish"
+    ]
+   },
    "deployVersions": {
     "develop": "0.3.0+3",
     "hotfix/0.1.3": "0.1.3+2",
@@ -1610,6 +2050,9 @@
   {
    "phase": "Verify",
    "actor": "tool",
+   "run": {
+    "verify": {}
+   },
    "deployVersions": {
     "develop": "0.3.0+3",
     "hotfix/0.1.3": "0.1.3+2",

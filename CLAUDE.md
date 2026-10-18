@@ -180,6 +180,13 @@ Change the spec first: `spec/cycles/*.json`, one file per `.gflow/config`
 combination, rendered into `spec/replay.html` by `python3 spec/render.py`.
 Change gflow after the spec is agreed. Never edit `spec/replay.html` by hand.
 
+`python3 spec/check.py [cycle ...]` proves gflow follows the spec: it replays
+every action's `run` (on its `on` branch) with the real release binary on a
+fake Azure DevOps remote in a temp dir, and names the first action whose ops,
+flag, or `deploy-version` output differ. It uses real git, so it is a dev tool
+and a CI job, never part of `cargo test`. Do not run two at once in one
+checkout's `target/`.
+
 ## Documentation Sync
 
 When a change alters user-facing behavior — a command, flag, menu entry, config

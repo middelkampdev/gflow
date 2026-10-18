@@ -169,7 +169,7 @@ svg text { font-family: var(--mono); }
     </div>
   </section>
 
-  <div class="note"><p><b>This page is the spec.</b> It is rendered from <code>spec/cycles/*.json</code>, one file per settings combination, by <code>python3 spec/render.py</code>. Edit the JSON, then render. gflow follows it in every combination.</p><ul id="rules"></ul></div>
+  <div class="note"><p><b>This page is the spec.</b> It is rendered from <code>spec/cycles/*.json</code>, one file per settings combination, by <code>python3 spec/render.py</code>. Edit the JSON, then render. gflow follows it in every combination: <code>python3 spec/check.py</code> replays every action with the real binary and compares.</p><ul id="rules"></ul></div>
 </div>
 
 <script type="application/json" id="cycles">{{CYCLES_JSON}}</script>
