@@ -4,7 +4,8 @@ mod common;
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::process::Command;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
 
 const HOOK: &str = ".claude/hooks/tdd-gate.sh";
 const BASELINE: &str = ".claude/hooks/coverage-baseline.txt";
@@ -49,7 +50,7 @@ case "$1" in
     shift
     for ref in "$@"; do
       case "$ref" in
-        --git-dir) printf '.git\n' ;;
+        --show-toplevel) pwd ;;
         HEAD:src) printf 'source-tree\n' ;;
         HEAD:tests) printf 'test-tree\n' ;;
         HEAD:Cargo.toml) printf 'manifest\n' ;;
@@ -68,12 +69,16 @@ esac
         fixture.executable(
             "cargo",
             r#"
+target="${CARGO_TARGET_DIR:-$(pwd -P)/target}"
 case "$*" in
   'llvm-cov --json --summary-only')
-    printf 'coverage\n' >> "$GFLOW_GATE_FIXTURE/coverage-runs"
+    printf 'json %s\n' "$target" >> "$GFLOW_GATE_FIXTURE/coverage-runs"
+    sleep "${GFLOW_GATE_DELAY:-0}"
     cat "$GFLOW_GATE_FIXTURE/coverage-report"
     ;;
-  'llvm-cov report --summary-only') ;;
+  'llvm-cov report --summary-only')
+    printf 'report %s\n' "$target" >> "$GFLOW_GATE_FIXTURE/coverage-runs"
+    ;;
   *) exit 97 ;;
 esac
 "#,
@@ -92,32 +97,46 @@ esac
         fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
     }
 
-    fn run(&self) -> String {
+    fn gate(&self, project_dir: &Path) -> Command {
         let path = std::env::join_paths([
             self.root.join("bin"),
-            std::path::PathBuf::from("/usr/bin"),
-            std::path::PathBuf::from("/bin"),
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
         ])
         .unwrap();
-        let output = Command::new("/bin/bash")
-            .arg(self.root.join(HOOK))
+        let mut gate = Command::new("/bin/bash");
+        gate.arg(self.root.join(HOOK))
             .current_dir(&*self.root)
-            .env("CLAUDE_PROJECT_DIR", &*self.root)
+            .env("CLAUDE_PROJECT_DIR", project_dir)
             .env("GFLOW_GATE_FIXTURE", &*self.root)
             .env("HOME", self.root.join("home"))
             .env("PATH", path)
-            .output()
-            .unwrap();
-        assert!(output.status.success(), "{output:?}");
-        assert!(output.stderr.is_empty(), "{output:?}");
-        String::from_utf8(output.stdout).unwrap()
+            .env_remove("CARGO_TARGET_DIR");
+        gate
     }
 
-    fn coverage_runs(&self) -> usize {
+    fn run(&self) -> String {
+        assert_quiet_success(self.gate(&self.root).output().unwrap())
+    }
+
+    fn coverage_log(&self) -> Vec<String> {
         fs::read_to_string(self.root.join("coverage-runs"))
             .unwrap()
             .lines()
+            .map(String::from)
+            .collect()
+    }
+
+    fn coverage_runs(&self) -> usize {
+        self.coverage_log()
+            .iter()
+            .filter(|call| call.starts_with("json "))
             .count()
+    }
+
+    fn assert_coverage_ran_in_its_own_target(&self) {
+        let target = fs::canonicalize(&*self.root).unwrap().join("target");
+        assert_eq!(self.coverage_log(), [format!("json {}", target.display())]);
     }
 
     fn assert_changed_state_blocks_low_coverage(&self) {
@@ -129,6 +148,57 @@ esac
             "100.00\n"
         );
     }
+}
+
+fn assert_quiet_success(output: Output) -> String {
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stderr.is_empty(), "{output:?}");
+    String::from_utf8(output.stdout).unwrap()
+}
+
+// A session that enters a worktree keeps CLAUDE_PROJECT_DIR on the main
+// checkout; only the hook's working directory points at the session's tree.
+#[test]
+fn the_gate_ratchets_the_tree_it_runs_in_not_claude_project_dir() {
+    let (Some(main), Some(worktree)) = (GateFixture::new(), GateFixture::new()) else {
+        return;
+    };
+    for tree in [&main, &worktree] {
+        tree.write(BASELINE, "99.00\n");
+    }
+    let output = assert_quiet_success(worktree.gate(&main.root).output().unwrap());
+    assert!(output.contains("coverage ratcheted"), "{output}");
+    assert_eq!(
+        fs::read_to_string(worktree.root.join(BASELINE)).unwrap(),
+        "100.00\n"
+    );
+    assert_eq!(
+        fs::read_to_string(main.root.join(BASELINE)).unwrap(),
+        "99.00\n"
+    );
+}
+
+#[test]
+fn parallel_gates_in_two_worktrees_never_share_a_target_dir() {
+    let (Some(main), Some(worktree)) = (GateFixture::new(), GateFixture::new()) else {
+        return;
+    };
+    let gates: Vec<_> = [&main, &worktree]
+        .map(|tree| {
+            tree.gate(&main.root)
+                .env("GFLOW_GATE_DELAY", "1")
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap()
+        })
+        .into_iter()
+        .collect();
+    for gate in gates {
+        assert!(assert_quiet_success(gate.wait_with_output().unwrap()).is_empty());
+    }
+    main.assert_coverage_ran_in_its_own_target();
+    worktree.assert_coverage_ran_in_its_own_target();
 }
 
 #[test]

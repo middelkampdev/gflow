@@ -5,8 +5,11 @@
 # lowering it requires explicit user approval (see CLAUDE.md, TDD Policy).
 set -u
 export LC_ALL=C
-cd "${CLAUDE_PROJECT_DIR:-$(pwd)}" || exit 0
-git rev-parse --git-dir >/dev/null 2>&1 || exit 0
+# Not CLAUDE_PROJECT_DIR: a session that enters a worktree keeps it on the main
+# checkout, while the hook runs in the session's own tree. Each tree then
+# builds into its own target/, so parallel gates cannot clean each other's.
+TREE=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$TREE" || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
 
 BASELINE_FILE=.claude/hooks/coverage-baseline.txt
