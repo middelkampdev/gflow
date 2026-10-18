@@ -1,0 +1,9 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+gflow = { path = ".." }
+serde_json = { version = "1", features = ["preserve_order"] }

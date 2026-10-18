@@ -33,8 +33,8 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch (no tags: Dependabot cannot bump it)
-      - run: python3 spec/render.py && git diff --exit-code spec/replay.html
-      - run: python3 spec/check.py
+      - run: cargo xtask render && git diff --exit-code spec/replay.html
+      - run: cargo xtask check
 
   # Deliberately outside the release `needs:` chain below: a broken plugin
   # manifest must fail CI, but it must not block shipping the binary.
