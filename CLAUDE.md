@@ -174,6 +174,12 @@ This standard is owned by this section, not by any planning skill. Plugin skills
 Run the checks in the **Load these first** table — do not work from memory of
 them. A principle you did not run is a principle you did not apply.
 
+## Branch-flow spec
+
+Change the spec first: `spec/cycles/*.json`, one file per `.gflow/config`
+combination, rendered into `spec/replay.html` by `python3 spec/render.py`.
+Change gflow after the spec is agreed. Never edit `spec/replay.html` by hand.
+
 ## Documentation Sync
 
 When a change alters user-facing behavior — a command, flag, menu entry, config
