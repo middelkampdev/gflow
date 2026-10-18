@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.1.0] - 2026-10-18
+
+No change to the `gflow` binary or the plugin skill. This release brings repository tooling to `master`.
+
+### Changed
+- CI pins every GitHub Action to a commit SHA, and Dependabot moves the pins weekly.
+- The publish jobs read their secrets from the `release` environment, which only `v*` tags reach.
+- The automatic Claude Code pull request review runs on Opus 5.5 with xhigh effort.
+
 ## [6.0.0] - 2026-10-18
 
 ### Changed
@@ -316,6 +325,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-platform CI/CD with GitHub Actions (macOS x86_64, macOS ARM64, Windows)
 - README with mermaid diagrams documenting the branch model and workflows
 
+[6.1.0]: https://github.com/jopmiddelkamp/gflow/compare/v6.0.0...v6.1.0
 [6.0.0]: https://github.com/jopmiddelkamp/gflow/compare/v5.1.0...v6.0.0
 [5.1.0]: https://github.com/jopmiddelkamp/gflow/compare/v5.0.0...v5.1.0
 [5.0.0]: https://github.com/jopmiddelkamp/gflow/compare/v4.6.0...v5.0.0
