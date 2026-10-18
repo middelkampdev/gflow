@@ -1,11 +1,18 @@
 name: CI
 
 on:
+  # No `master` here: master only receives release and hotfix merges, and each
+  # one is tagged v*. The tag run tests that exact commit and gates the release.
   push:
-    branches: [master, develop]
+    branches: [develop]
     tags: ['v*']
   pull_request:
     branches: [master, develop]
+
+# Only PR runs cancel: a superseded PR push is waste, a tag run is a release.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -17,7 +24,6 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch (no tags: Dependabot cannot bump it)
       - run: cargo test --all
-      - run: cargo build --release
 
   # The spec is the agreed behavior (spec/cycles/*.json): the rendered page must
   # match it, and the real binary must replay it. A build that breaks it must

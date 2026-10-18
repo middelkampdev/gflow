@@ -6,7 +6,8 @@ on:
 
 jobs:
   claude-review:
-
+    # Dependabot PRs get no secrets, so the review cannot run on them.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
