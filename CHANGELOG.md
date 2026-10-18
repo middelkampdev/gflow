@@ -5,12 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [6.0.0] - Unreleased
+## [6.0.0] - 2026-10-18
 
 ### Changed
 - **Breaking:** `gflow start release` no longer bumps `develop` to the next minor version. `develop` keeps the version of the last release or hotfix that landed on it, so landing on `develop` no longer conflicts on the version file. Use `gflow deploy-version` for a develop build's version.
 - **Breaking:** the clean release tag (under `rc`) and the hotfix tag now sit on the release or hotfix tip, the exact commit that was tested, and `gflow finish` cuts and pushes them before any merge. They used to sit on `main`'s merge commit. Under `rc`, `vX.Y.0` sits on the same commit as the last `-rc.N`. A tag an older gflow cut on `main` is still accepted on a re-run.
 - **Breaking:** protected mode puts every version change on a version branch: the release cut (`version/X.Y.0-into-release-X.Y.0`), `gflow bump` under `patch`, and the hotfix start (`version/X.Y.Z-into-hotfix-X.Y.Z`). gflow pushes the release or hotfix branch first. A new hotfix gets no tag at start.
+- **Breaking:** protected-mode version PR branches are named `version/<version>-into-<target>` (they were `chore/set-version-X.Y.Z` and `release-chore/X.Y.0/set-version`), and gflow completes these PRs itself and deletes their branch. `release-chore/*` branches are no longer recognized: merge or close their PRs before you upgrade.
 - Version PRs are merged at once with squash, so the tag sits on the squash commit in the same run. Auto-complete is now the fallback when the platform will not merge yet; the tag then waits for a re-run of `gflow bump`.
 - A hotfix lands on `main`, then on each open release, then on `develop` (it used to land on `develop` before the releases), in free and protected mode.
 - Protected mode: a new landing branch always gets its target merged in, also when that changes nothing, so every landing looks the same.
@@ -315,6 +316,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cross-platform CI/CD with GitHub Actions (macOS x86_64, macOS ARM64, Windows)
 - README with mermaid diagrams documenting the branch model and workflows
 
+[6.0.0]: https://github.com/jopmiddelkamp/gflow/compare/v5.1.0...v6.0.0
 [5.1.0]: https://github.com/jopmiddelkamp/gflow/compare/v5.0.0...v5.1.0
 [5.0.0]: https://github.com/jopmiddelkamp/gflow/compare/v4.6.0...v5.0.0
 [4.6.0]: https://github.com/jopmiddelkamp/gflow/compare/v4.5.0...v4.6.0
