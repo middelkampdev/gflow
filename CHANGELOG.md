@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.2.0] - 2026-10-18
+
+No change to the `gflow` binary or the plugin skill. This release brings repository tooling to `master`.
+
+### Changed
+- The spec tools are Rust: `cargo xtask render` and `cargo xtask check` replace `spec/render.py` and `spec/check.py`, so the repository no longer needs Python.
+- CI no longer runs on pushes to `master`: the `v*` tag run tests the same commit. PR runs that a newer push replaces are cancelled; tag runs never are.
+- The test matrix no longer runs `cargo build --release`; the release job builds the binaries.
+- The Claude Code pull request review skips Dependabot pull requests, which get no Actions secrets.
+- GitHub Actions pins moved to their latest versions.
+
 ## [6.1.0] - 2026-10-18
 
 No change to the `gflow` binary or the plugin skill. This release brings repository tooling to `master`.
@@ -325,6 +336,7 @@ No change to the `gflow` binary or the plugin skill. This release brings reposit
 - Cross-platform CI/CD with GitHub Actions (macOS x86_64, macOS ARM64, Windows)
 - README with mermaid diagrams documenting the branch model and workflows
 
+[6.2.0]: https://github.com/jopmiddelkamp/gflow/compare/v6.1.0...v6.2.0
 [6.1.0]: https://github.com/jopmiddelkamp/gflow/compare/v6.0.0...v6.1.0
 [6.0.0]: https://github.com/jopmiddelkamp/gflow/compare/v5.1.0...v6.0.0
 [5.1.0]: https://github.com/jopmiddelkamp/gflow/compare/v5.0.0...v5.1.0
