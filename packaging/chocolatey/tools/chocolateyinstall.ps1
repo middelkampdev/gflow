@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $toolsDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $version = $env:chocolateyPackageVersion
-$url = "https://github.com/jopmiddelkamp/gflow/releases/download/v${version}/gflow-windows-x86_64.exe"
+$url = "https://github.com/middelkampdev/gflow/releases/download/v${version}/gflow-windows-x86_64.exe"
 $checksum = '__CHECKSUM__'
 
 Get-ChocolateyWebFile -PackageName 'gflow' `
