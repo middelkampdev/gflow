@@ -7,7 +7,7 @@ A cross-platform CLI tool that implements a customized gitflow workflow. It dete
 ### Homebrew (macOS)
 
 ```bash
-brew tap jopmiddelkamp/tap
+brew tap middelkampdev/tap
 brew install gflow
 ```
 
@@ -19,7 +19,7 @@ choco install gflow
 
 ### Pre-built binaries
 
-Download the latest release from the [GitHub Releases](https://github.com/jopmiddelkamp/gflow/releases) page.
+Download the latest release from the [GitHub Releases](https://github.com/middelkampdev/gflow/releases) page.
 
 ### From source
 
@@ -218,7 +218,7 @@ Claude how to drive this CLI (branch start/finish, releases, worktrees, PR
 automation). Install it with:
 
 ```
-/plugin marketplace add jopmiddelkamp/gflow
+/plugin marketplace add middelkampdev/gflow
 /plugin install gflow@gflow
 ```
 
