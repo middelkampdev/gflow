@@ -15,16 +15,16 @@
       }
     </style>
     <radialGradient id="radial-gradient" cx="1868" cy="910.17" fx="1868" fy="910.17" r="744.28" gradientTransform="translate(-500.98 -115.39) scale(.41)" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ff9424"/>
-      <stop offset=".2" stop-color="#fe8f23"/>
-      <stop offset=".47" stop-color="#fa8220"/>
-      <stop offset=".77" stop-color="#f46d1b"/>
-      <stop offset=".98" stop-color="#ef5a17"/>
+      <stop offset="0" stop-color="#39cefd"/>
+      <stop offset=".2" stop-color="#2bc6fd"/>
+      <stop offset=".47" stop-color="#18bafd"/>
+      <stop offset=".77" stop-color="#0b83c8"/>
+      <stop offset=".98" stop-color="#03599e"/>
     </radialGradient>
     <filter id="drop-shadow-1" x="2.34" y="80.99" width="507.12" height="380.16" filterUnits="userSpaceOnUse">
       <feOffset dx="0" dy="15"/>
       <feGaussianBlur result="blur" stdDeviation="30"/>
-      <feFlood flood-color="#5a2306" flood-opacity=".65"/>
+      <feFlood flood-color="#04182b" flood-opacity=".65"/>
       <feComposite in2="blur" operator="in"/>
       <feComposite in="SourceGraphic"/>
     </filter>

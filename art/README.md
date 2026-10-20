@@ -12,15 +12,17 @@ Source of truth: `SVG/Artboard *.svg`. Every other file here is derived from the
 
 ## Colors
 
-Four colors do all the work. The gradient is radial: start at the light corner
-(top-left on the icon, center on artboard 1), end at the far corner.
+The colors come from the middelkamp.dev brand (`website/public/assets/site.css`).
+The gradient is radial: start at the light corner (top-left on the icon, center
+on artboard 1), pass the mid color halfway, end at the far corner.
 
-| Role | Hex |
-|---|---|
-| Gradient start | `#ff9424` |
-| Gradient end | `#ef5a17` |
-| Ink | `#1b2a4a` |
-| Drop shadow (artboard 1) | `#5a2306` at 65 % |
+| Role | Hex | Site token |
+|---|---|---|
+| Gradient start | `#39cefd` | `--fold-light` |
+| Gradient mid | `#16b9fd` | `--fold-mid` |
+| Gradient end | `#02559a` | `--fold-dark` |
+| Ink | `#0b2440` | `--ink` |
+| Drop shadow (artboard 1) | `#04182b` at 65 % | — |
 
 ## Wordmark
 
