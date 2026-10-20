@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.3.0] - 2026-10-20
+
+No change to the `gflow` binary or the plugin skill.
+
+### Changed
+- The repository moved to `middelkampdev/gflow` and the Homebrew tap to `middelkampdev/homebrew-tap`. Every repository, tap, and package link points at the new location.
+- The logo uses the middelkamp.dev blue palette instead of orange. All art exports and the Chocolatey icon are regenerated.
+
 ## [6.2.0] - 2026-10-18
 
 No change to the `gflow` binary or the plugin skill. This release brings repository tooling to `master`.
@@ -336,6 +344,7 @@ No change to the `gflow` binary or the plugin skill. This release brings reposit
 - Cross-platform CI/CD with GitHub Actions (macOS x86_64, macOS ARM64, Windows)
 - README with mermaid diagrams documenting the branch model and workflows
 
+[6.3.0]: https://github.com/middelkampdev/gflow/compare/v6.2.0...v6.3.0
 [6.2.0]: https://github.com/jopmiddelkamp/gflow/compare/v6.1.0...v6.2.0
 [6.1.0]: https://github.com/jopmiddelkamp/gflow/compare/v6.0.0...v6.1.0
 [6.0.0]: https://github.com/jopmiddelkamp/gflow/compare/v5.1.0...v6.0.0
