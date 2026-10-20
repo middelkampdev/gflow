@@ -13,7 +13,7 @@ fn element(name: &str) -> &'static str {
 fn icon_url_is_jsdelivr_pinned_to_the_tag_placeholder() {
     assert_eq!(
         element("iconUrl"),
-        "https://cdn.jsdelivr.net/gh/jopmiddelkamp/gflow@__TAG__/packaging/chocolatey/icon.png"
+        "https://cdn.jsdelivr.net/gh/middelkampdev/gflow@__TAG__/packaging/chocolatey/icon.png"
     );
 }
 

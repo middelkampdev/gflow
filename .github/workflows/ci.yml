@@ -132,22 +132,22 @@ jobs:
           echo "SHA256 ARM: $SHA_ARM"
           echo "SHA256 x86: $SHA_X86"
 
-          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/jopmiddelkamp/homebrew-tap.git tap
+          git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/middelkampdev/homebrew-tap.git tap
           cd tap
 
           cat > Formula/gflow.rb << 'FORMULA'
           class Gflow < Formula
             desc "gflow - a customized gitflow workflow CLI"
-            homepage "https://github.com/jopmiddelkamp/gflow"
+            homepage "https://github.com/middelkampdev/gflow"
             version "VERSION_PLACEHOLDER"
             license "Apache-2.0"
 
             on_macos do
               if Hardware::CPU.arm?
-                url "https://github.com/jopmiddelkamp/gflow/releases/download/v#{version}/gflow-macos-aarch64"
+                url "https://github.com/middelkampdev/gflow/releases/download/v#{version}/gflow-macos-aarch64"
                 sha256 "SHA_ARM_PLACEHOLDER"
               else
-                url "https://github.com/jopmiddelkamp/gflow/releases/download/v#{version}/gflow-macos-x86_64"
+                url "https://github.com/middelkampdev/gflow/releases/download/v#{version}/gflow-macos-x86_64"
                 sha256 "SHA_X86_PLACEHOLDER"
               end
             end

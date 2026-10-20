@@ -208,7 +208,7 @@ not verbose.
 (`.claude-plugin/`). It is not auto-loaded just by working in this repo — it
 has to be installed. Two sources, same marketplace name:
 
-- Users install the published copy: `/plugin marketplace add jopmiddelkamp/gflow`
+- Users install the published copy: `/plugin marketplace add middelkampdev/gflow`
 - Contributors install this working copy, so local edits to `SKILL.md` take
   effect: `/plugin marketplace add ./` (run from the repo root)
 

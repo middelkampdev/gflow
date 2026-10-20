@@ -2,21 +2,21 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
     <id>gflow</id>
-    <version>6.2.0</version>
+    <version>6.3.0</version>
     <title>gflow - a customized gitflow workflow CLI</title>
     <authors>Jop Middelkamp</authors>
     <copyright>Copyright 2026 Jop Middelkamp</copyright>
-    <projectUrl>https://github.com/jopmiddelkamp/gflow</projectUrl>
-    <licenseUrl>https://github.com/jopmiddelkamp/gflow/blob/master/LICENSE</licenseUrl>
+    <projectUrl>https://github.com/middelkampdev/gflow</projectUrl>
+    <licenseUrl>https://github.com/middelkampdev/gflow/blob/master/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <iconUrl>https://cdn.jsdelivr.net/gh/jopmiddelkamp/gflow@__TAG__/packaging/chocolatey/icon.png</iconUrl>
-    <packageSourceUrl>https://github.com/jopmiddelkamp/gflow</packageSourceUrl>
-    <projectSourceUrl>https://github.com/jopmiddelkamp/gflow</projectSourceUrl>
-    <docsUrl>https://github.com/jopmiddelkamp/gflow#readme</docsUrl>
-    <bugTrackerUrl>https://github.com/jopmiddelkamp/gflow/issues</bugTrackerUrl>
+    <iconUrl>https://cdn.jsdelivr.net/gh/middelkampdev/gflow@__TAG__/packaging/chocolatey/icon.png</iconUrl>
+    <packageSourceUrl>https://github.com/middelkampdev/gflow</packageSourceUrl>
+    <projectSourceUrl>https://github.com/middelkampdev/gflow</projectSourceUrl>
+    <docsUrl>https://github.com/middelkampdev/gflow#readme</docsUrl>
+    <bugTrackerUrl>https://github.com/middelkampdev/gflow/issues</bugTrackerUrl>
     <summary>A cross-platform CLI tool for a customized gitflow workflow.</summary>
     <description>A cross-platform CLI tool that implements a customized gitflow workflow. Detects your current git branch, presents context-appropriate options, and handles branching, merging, tagging, and PR creation.</description>
-    <releaseNotes>https://github.com/jopmiddelkamp/gflow/releases</releaseNotes>
+    <releaseNotes>https://github.com/middelkampdev/gflow/releases</releaseNotes>
     <tags>git gitflow cli workflow branching</tags>
   </metadata>
 </package>

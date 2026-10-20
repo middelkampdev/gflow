@@ -55,7 +55,7 @@ If a release branch already exists, gflow checks it out. Verify whether version 
    - Add a new `## [X.Y.Z] - YYYY-MM-DD` section at the top (below the header)
    - Categorize commits since last clean tag into: `### Added`, `### Changed`, `### Fixed`, `### Removed` (only include sections that have entries)
    - Write human-readable descriptions (not raw commit messages)
-   - Add a comparison link at the bottom: `[X.Y.Z]: https://github.com/jopmiddelkamp/gflow/compare/vPREVIOUS...vX.Y.Z`
+   - Add a comparison link at the bottom: `[X.Y.Z]: https://github.com/middelkampdev/gflow/compare/vPREVIOUS...vX.Y.Z`
 4. **Run tests** — `cargo test --all` must pass (use `~/.cargo/bin/cargo` if `cargo` is not in PATH)
 **Conditional — the skill's minimum CLI version.** `skills/gflow/SKILL.md` carries
 a `**Minimum gflow version:**` line. It is the *oldest* CLI the skill still works
@@ -111,8 +111,8 @@ The CI pipeline (`.github/workflows/ci.yml`) responds to tags:
 ### Clean tags (e.g., `v2.1.0`) — production release
 - Runs tests on Linux, macOS, Windows
 - Builds release binaries: `gflow-macos-aarch64`, `gflow-macos-x86_64`, `gflow-windows-x86_64.exe`
-- Creates a GitHub Release at `jopmiddelkamp/gflow` with auto-generated release notes and binaries attached
-- Updates the Homebrew formula at `jopmiddelkamp/homebrew-tap` (requires `HOMEBREW_TAP_TOKEN` secret)
+- Creates a GitHub Release at `middelkampdev/gflow` with auto-generated release notes and binaries attached
+- Updates the Homebrew formula at `middelkampdev/homebrew-tap` (requires `HOMEBREW_TAP_TOKEN` secret)
 - Publishes to Chocolatey (requires `CHOCOLATEY_API_KEY` secret)
 
 After `gflow finish`, verify the **tag** run. `--limit 1` alone picks the newer master/develop run:

@@ -7,14 +7,14 @@
       }
 
       .cls-2 {
-        fill: #1b2a4a;
+        fill: #0b2440;
       }
     </style>
     <radialGradient id="radial-gradient" cx="-11.92" cy="965.09" fx="-11.92" fy="965.09" r="110.36" gradientTransform="translate(-306.91 -321.3) rotate(-44.68) scale(.78) skewX(.64)" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ff9424"/>
-      <stop offset=".22" stop-color="#fd8b22"/>
-      <stop offset=".61" stop-color="#f6751d"/>
-      <stop offset="1" stop-color="#ef5a17"/>
+      <stop offset="0" stop-color="#39cefd"/>
+      <stop offset=".22" stop-color="#2ac5fd"/>
+      <stop offset=".61" stop-color="#12a3e7"/>
+      <stop offset="1" stop-color="#02559a"/>
     </radialGradient>
   </defs>
   <g transform="translate(-6.08 0.13)">
