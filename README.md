@@ -228,7 +228,8 @@ older than the syntax it documents.
 
 ## Non-Interactive CLI (for AI tools & scripts)
 
-All commands can be invoked directly via subcommands, bypassing the interactive menu:
+All commands can be invoked directly via subcommands, bypassing the interactive menu.
+When gflow needs an answer and there is no terminal, it stops with an error that names the question (`No terminal to answer 'Release type' ...`); pass the flag that answers it (here `--major` or `--minor`).
 
 ### Start commands
 
