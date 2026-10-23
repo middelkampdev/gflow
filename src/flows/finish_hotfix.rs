@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::flows::{
-    announce_pending_landing, cleanup_landing_branches, delete_source_branch, ensure_landing_branch,
-    landing_conflict_hint, finish_leg_landed, land_leg_strict, landing_pr_body, merge_into, refuse_open_legacy_pr, LegState,
+    complete_landing_pr, cleanup_landing_branches, delete_source_branch, ensure_landing_branch,
+    finish_leg_landed, land_leg_strict, landing_pr_body, merge_into, refuse_open_legacy_pr, LegState,
     open_versioned_branches, push_if_needed, report_commits_past_landing, resume_hint, tag_on_mainline, tag_tip_before_landing,
     tip_landed_somewhere,
 };
@@ -123,7 +123,9 @@ fn finish_hotfix_protected(git: &dyn Git, hosting: &dyn HostingPlatform, cfg: &R
         let title = format!("chore: merge hotfix {version} into {main_branch}");
         let landing = ensure_landing_branch(git, &hotfix_branch, main_branch, "gflow finish")?;
         let url = hosting.create_or_get_pr(&landing, main_branch, &title, landing_pr_body(template))?;
-        announce_pending_landing(hosting, &title, &url, "gflow finish", &landing_conflict_hint(&landing, main_branch));
+        if complete_landing_pr(git, hosting, &title, &url, &landing, main_branch, "gflow finish") {
+            return finish_hotfix_protected(git, hosting, cfg, major, minor, patch, main_branch, template, accept_merge_type);
+        }
         return Ok(None);
     }
     if let Some(pr) = &main_pr {
@@ -141,7 +143,9 @@ fn finish_hotfix_protected(git: &dyn Git, hosting: &dyn HostingPlatform, cfg: &R
             LegState::Landed(pr) => landed.push(pr),
             LegState::ContentPresent => content_landed = true,
             LegState::Pending { url, landing } => {
-                announce_pending_landing(hosting, &title, &url, "gflow finish", &landing_conflict_hint(&landing, target));
+                if complete_landing_pr(git, hosting, &title, &url, &landing, target, "gflow finish") {
+                    return finish_hotfix_protected(git, hosting, cfg, major, minor, patch, main_branch, template, accept_merge_type);
+                }
                 return Ok(None);
             }
         }

@@ -155,9 +155,9 @@ pub(crate) fn enforce_completion_type(git: &dyn Git, url: &str, merge_commit_sha
 }
 
 // --- Protected-mode landing helpers ----------------------------------------
-// gflow never merges a PR (SKILL.md principle: protected mode never pushes
-// main/develop) — a landing step opens a PR and stops; a human merges it, and
-// the next run picks up from there. Completion is derived from the hosting
+// Protected mode never pushes main/develop: a landing step opens a PR, which
+// gflow merges at once when the platform allows (`complete_landing_pr`);
+// otherwise the run stops and the next run picks up from there. Completion is derived from the hosting
 // platform the same way `finish_work.rs::try_cleanup_merged` derives it, but
 // keyed by a specific (source, target) pair rather than "any merge".
 
@@ -181,7 +181,7 @@ pub(crate) fn reconcile_with_origin(git: &dyn Git, branch: &str) -> Result<(), S
 
 /// The migration guard for landing branches: an open PR whose head is
 /// the source branch itself comes from an older gflow and must be dealt with
-/// by a human — gflow never merges or closes PRs.
+/// by a human — gflow never merges or closes a PR it did not open.
 pub(crate) fn refuse_open_legacy_pr(hosting: &dyn HostingPlatform, source: &str, target: &str) -> Result<(), String> {
     match hosting.open_pr_to(source, target)? {
         Some(url) => Err(format!(
@@ -430,7 +430,7 @@ pub(crate) fn pr_block(title: &str, url: &str, bold: bool) -> String {
 pub(crate) fn pending_landing_message(title: &str, url: &str, rerun: &str, hint: &str, bold: bool) -> String {
     format!(
         "\n{}\n\n\
-         Waiting for a human to merge this PR.\n\
+         Waiting for this PR to merge.\n\
          Re-run '{rerun}' to continue after the merge.\n\n\
          {hint}",
         pr_block(title, url, bold)
@@ -446,9 +446,9 @@ pub(crate) fn copy_pr_to_clipboard(hosting: &dyn HostingPlatform, title: &str, u
     }
 }
 
-/// Announce a landing step that opened (or reused) a PR and is stopping for a
-/// human to merge it — and put that PR in front of them in the browser and on
-/// their clipboard.
+/// Announce a landing step that opened (or reused) a PR gflow could not merge
+/// yet — and put that PR in front of the user in the browser and on their
+/// clipboard.
 pub(crate) fn announce_pending_landing(hosting: &dyn HostingPlatform, title: &str, url: &str, rerun: &str, hint: &str) {
     copy_pr_to_clipboard(hosting, title, url);
     println!("{}", pending_landing_message(title, url, rerun, hint, crate::style::styled()));
@@ -542,6 +542,38 @@ pub(crate) fn complete_version_pr(hosting: &dyn HostingPlatform, url: &str) -> V
             VersionPrCompletion::Manual
         }
     }
+}
+
+/// Landing PRs are machinery as well: gflow merges each one at once with a
+/// merge commit, so one run lands every leg. When the platform will not merge
+/// yet (checks or reviews pending) gflow turns on auto-complete, announces the
+/// PR and the run stops for a re-run. Returns whether the leg visibly landed on
+/// origin, so the caller takes its next pass. A merge the fetch does not show
+/// (yet) stops the run without an error: the PR is merged, so a re-run finds
+/// the leg landed, and a slow platform can never make a finish loop.
+pub(crate) fn complete_landing_pr(git: &dyn Git, hosting: &dyn HostingPlatform, title: &str, url: &str, landing: &str, target: &str, rerun: &str) -> bool {
+    let Err(merge) = hosting.merge_landing_pr(url) else {
+        println!("✔ Merged {url} with a merge commit.");
+        let visible = git.fetch().and_then(|()| git.is_ancestor(landing, &format!("origin/{target}"))).unwrap_or_else(|e| {
+            eprintln!("⚠ {e}");
+            false
+        });
+        if !visible {
+            println!("origin/{target} does not show the merge yet. Re-run '{rerun}' to continue.");
+        }
+        return visible;
+    };
+    let auto_complete = hosting.enable_landing_auto_complete(url);
+    announce_pending_landing(hosting, title, url, rerun, &landing_conflict_hint(landing, target));
+    match auto_complete {
+        Ok(()) => println!("Auto-complete is on: the platform merges this PR once its checks and reviews pass."),
+        Err(auto_complete) => {
+            eprintln!("⚠ gflow could not merge this PR. Merge it yourself with a merge commit.");
+            eprintln!("  Merge: {merge}");
+            eprintln!("  Auto-complete: {auto_complete}");
+        }
+    }
+    false
 }
 
 /// Best-effort browser open for a PR gflow just created or re-surfaced: the PR
@@ -1627,7 +1659,7 @@ mod tests {
             "\nchore: merge hotfix 2.11.6 into main\n\
              https://example.com/pull/473\n\
              \n\
-             Waiting for a human to merge this PR.\n\
+             Waiting for this PR to merge.\n\
              Re-run 'gflow finish' to continue after the merge.\n\
              \n\
              Conflicts? ..."

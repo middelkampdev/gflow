@@ -129,7 +129,8 @@ pub fn az(args: &[String], prs: &mut Vec<Value>, origin: &mut Git) -> Result<Str
                 pr["auto"] = json!(true);
             }
             if opt("--status") == Some("completed") {
-                complete_pr(pr, "squash", origin)?;
+                let method = if opt("--squash") == Some("false") { "merge" } else { "squash" };
+                complete_pr(pr, method, origin)?;
                 if opt("--delete-source-branch") == Some("true") {
                     origin(&["update-ref", "-d", &format!("refs/heads/{}", pr["source"].as_str().unwrap_or_default())])?;
                 }
@@ -264,6 +265,16 @@ mod tests {
             json!({"id": 1, "status": "completed", "source": "feature/a", "target": "develop", "title": "feat: a",
                    "head": "sha-of-feature/a", "merge": "new", "method": "squash"})
         );
+    }
+
+    #[test]
+    fn az_completes_with_a_merge_commit_when_squash_is_off() {
+        let mut prs = vec![json!({"id": 1, "status": "active", "source": "landing/x", "target": "main", "title": "chore: x"})];
+        let mut calls = vec![];
+        az(&args("repos pr update --id 1 --status completed --squash false --delete-source-branch false"), &mut prs, &mut origin(&mut calls)).unwrap();
+        assert_eq!(calls[3], "commit-tree tree1 -p sha-of-main -p sha-of-landing/x -m Merge PR #1: chore: x");
+        assert_eq!(calls.len(), 5, "the source branch stays: {calls:?}");
+        assert_eq!(prs[0]["method"], "merge");
     }
 
     #[test]

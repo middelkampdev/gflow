@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use crate::flows::{
-    announce_pending_landing, complete_version_pr, open_version_pr, VersionPrCompletion, cleanup_landing_branches, delete_branches_guarded, delete_source_branch, ensure_landing_branch,
-    landing_conflict_hint, finish_leg_landed, land_leg_strict, landing_pr_body, leg_landed, merge_where_checked_out, refuse_open_legacy_pr, LegState,
+    complete_landing_pr, complete_version_pr, open_version_pr, VersionPrCompletion, cleanup_landing_branches, delete_branches_guarded, delete_source_branch, ensure_landing_branch,
+    finish_leg_landed, land_leg_strict, landing_pr_body, leg_landed, merge_where_checked_out, refuse_open_legacy_pr, LegState,
     merge_into, push_if_needed, push_tag_if_missing, report_commits_past_landing, require_clean_tree,
     resume_hint, run_version_script, tag_on_mainline, tag_tip_before_landing, tip_landed_somewhere,
 };
@@ -253,8 +253,8 @@ pub fn sync_with_develop(git: &dyn Git, hosting: &dyn HostingPlatform, cfg: &Rep
     Ok(())
 }
 
-/// Protected mode: gflow never merges into develop itself, so sync opens a
-/// landing PR from the develop landing branch and stops for a human to merge.
+/// Protected mode: sync lands on develop through a landing PR, which gflow
+/// merges at once when the platform allows.
 /// The strict landed-check is what keeps a stale merged landing from being
 /// trusted as "already synced" — a release with new commits since that merge
 /// re-enters this same PR-opening path with a refreshed landing branch.
@@ -266,7 +266,9 @@ fn sync_with_develop_protected(git: &dyn Git, hosting: &dyn HostingPlatform, rel
             Ok(())
         }
         LegState::Pending { url, landing } => {
-            announce_pending_landing(hosting, &title, &url, "gflow sync", &landing_conflict_hint(&landing, "develop"));
+            if complete_landing_pr(git, hosting, &title, &url, &landing, "develop", "gflow sync") {
+                return sync_with_develop_protected(git, hosting, release, release_branch, template, accept_merge_type);
+            }
             Ok(())
         }
     }
@@ -372,10 +374,9 @@ fn staging_gate(git: &dyn Git, release_branch: &str, main_branch: &str, major: u
     Ok(())
 }
 
-/// Protected mode: gflow never merges into `main`/`develop` itself (gflow
-/// SKILL.md, "Landing modes"), so each landing step opens a PR and stops for a
-/// human to merge; the next run picks up from wherever `leg_landed` finds it
-/// landed.
+/// Protected mode: each landing step opens a PR, which gflow merges at once
+/// when the platform allows and then takes its next pass; otherwise the run
+/// stops and the next run picks up from wherever `leg_landed` finds it landed.
 /// Under rc the clean tag goes on the release tip, the tested build, before
 /// the main landing opens.
 #[allow(clippy::too_many_arguments)]
@@ -407,7 +408,9 @@ fn finish_release_protected(git: &dyn Git, hosting: &dyn HostingPlatform, cfg: &
                 let title = format!("chore: merge release {release} into {main_branch}");
                 let landing = ensure_landing_branch(git, &release_branch, main_branch, "gflow finish")?;
                 let url = hosting.create_or_get_pr(&landing, main_branch, &title, landing_pr_body(template))?;
-                announce_pending_landing(hosting, &title, &url, "gflow finish", &landing_conflict_hint(&landing, main_branch));
+                if complete_landing_pr(git, hosting, &title, &url, &landing, main_branch, "gflow finish") {
+                    return finish_release_protected(git, hosting, cfg, major, minor, main_branch, template, accept_merge_type);
+                }
                 return Ok(None);
             }
             if let Some(pr) = &main_pr {
@@ -432,7 +435,9 @@ fn finish_release_protected(git: &dyn Git, hosting: &dyn HostingPlatform, cfg: &
                 let title = format!("chore: merge release {release} into {main_branch}");
                 let landing = ensure_landing_branch(git, &release_branch, main_branch, "gflow finish")?;
                 let url = hosting.create_or_get_pr(&landing, main_branch, &title, landing_pr_body(template))?;
-                announce_pending_landing(hosting, &title, &url, "gflow finish", &landing_conflict_hint(&landing, main_branch));
+                if complete_landing_pr(git, hosting, &title, &url, &landing, main_branch, "gflow finish") {
+                    return finish_release_protected(git, hosting, cfg, major, minor, main_branch, template, accept_merge_type);
+                }
                 return Ok(None);
             }
         },
@@ -444,7 +449,9 @@ fn finish_release_protected(git: &dyn Git, hosting: &dyn HostingPlatform, cfg: &
         LegState::Landed(pr) => landed.push(pr),
         LegState::ContentPresent => content_landed = true,
         LegState::Pending { url, landing } => {
-            announce_pending_landing(hosting, &title, &url, "gflow finish", &landing_conflict_hint(&landing, "develop"));
+            if complete_landing_pr(git, hosting, &title, &url, &landing, "develop", "gflow finish") {
+                return finish_release_protected(git, hosting, cfg, major, minor, main_branch, template, accept_merge_type);
+            }
             return Ok(None);
         }
     }

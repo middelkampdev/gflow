@@ -615,6 +615,16 @@ pub struct MockHosting {
     /// PRs that `merged_pr_to` reports only once `merge_pr` succeeded.
     pub landed_on_merge: HashMap<(String, String), gflow::hosting::LandedPr>,
     merged_now: std::cell::Cell<bool>,
+    /// When set, `merge_landing_pr` fails with this. Set by default: a platform
+    /// refuses while checks run, so a landing PR stays pending unless a test
+    /// clears it.
+    pub landing_merge_error: Option<String>,
+    /// When set, `enable_landing_auto_complete` fails with this.
+    pub landing_auto_complete_error: Option<String>,
+    /// Legs that `merged_pr_to` reports once landing merges succeed: the n-th
+    /// successful `merge_landing_pr` reveals the first n entries.
+    pub landed_on_landing_merge: Vec<((String, String), gflow::hosting::LandedPr)>,
+    landing_merges: std::cell::Cell<usize>,
 }
 
 impl MockHosting {
@@ -632,6 +642,10 @@ impl MockHosting {
             merge_pr_error: None,
             landed_on_merge: HashMap::new(),
             merged_now: std::cell::Cell::new(false),
+            landing_merge_error: Some("required checks are pending".to_string()),
+            landing_auto_complete_error: None,
+            landed_on_landing_merge: Vec::new(),
+            landing_merges: std::cell::Cell::new(0),
         }
     }
 
@@ -694,7 +708,11 @@ impl HostingPlatform for MockHosting {
         self.record(format!("merged_pr_to:{head}:{base}"))?;
         let key = (head.to_string(), base.to_string());
         let after_merge = self.merged_now.get().then(|| self.landed_on_merge.get(&key)).flatten();
-        Ok(after_merge.or_else(|| self.merged_prs_to.get(&key)).cloned())
+        let after_landing_merge = self.landed_on_landing_merge[..self.landing_merges.get()]
+            .iter()
+            .find(|(leg, _)| *leg == key)
+            .map(|(_, pr)| pr);
+        Ok(after_merge.or(after_landing_merge).or_else(|| self.merged_prs_to.get(&key)).cloned())
     }
 
     fn enable_auto_complete(&self, url: &str) -> Result<(), String> {
@@ -709,6 +727,20 @@ impl HostingPlatform for MockHosting {
         }
         self.merged_now.set(true);
         Ok(())
+    }
+
+    fn merge_landing_pr(&self, url: &str) -> Result<(), String> {
+        self.record(format!("merge_landing_pr:{url}"))?;
+        if let Some(e) = &self.landing_merge_error {
+            return Err(e.clone());
+        }
+        self.landing_merges.set(self.landing_merges.get() + 1);
+        Ok(())
+    }
+
+    fn enable_landing_auto_complete(&self, url: &str) -> Result<(), String> {
+        self.record(format!("enable_landing_auto_complete:{url}"))?;
+        self.landing_auto_complete_error.clone().map_or(Ok(()), Err)
     }
 
     fn open_url(&self, url: &str) -> Result<(), String> {
