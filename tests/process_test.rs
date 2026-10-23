@@ -479,7 +479,7 @@ fn process_adapter_child() {
     if scenario == "reaped-clipboard" {
         reap_children_automatically();
         assert_eq!(
-            GitHub::new(&SystemCli).copy_text("copied\n").unwrap_err(),
+            GitHub::new(None, &SystemCli).copy_text("copied\n").unwrap_err(),
             "no clipboard tool available"
         );
         return;
@@ -494,7 +494,7 @@ fn process_adapter_child() {
     if scenario == "closed-pipe" {
         let text = "x".repeat(1_000_000);
         assert_eq!(
-            GitHub::new(&SystemCli).copy_text(&text).unwrap_err(),
+            GitHub::new(None, &SystemCli).copy_text(&text).unwrap_err(),
             "no clipboard tool available"
         );
         return;
@@ -502,7 +502,7 @@ fn process_adapter_child() {
     if scenario == "templates" {
         let runner =
             common::MockCliRunner::scripted(&[Ok(""), Ok("https://github.com/o/r/pull/1")]);
-        let url = GitHub::new(&runner)
+        let url = GitHub::new(None, &runner)
             .create_or_get_pr("feature/x", "develop", "feat: x", PrBody::NativeDefault)
             .unwrap();
         assert_eq!(url, "https://github.com/o/r/pull/1");
@@ -597,7 +597,7 @@ fn process_adapter_child() {
         return;
     }
 
-    let hosting = GitHub::new(&SystemCli);
+    let hosting = GitHub::new(None, &SystemCli);
     let opened = hosting.open_url("https://example.invalid/pull/1?a=b&c=d");
     if scenario == "success" {
         opened.unwrap();

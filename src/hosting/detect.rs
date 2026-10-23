@@ -11,7 +11,8 @@ const PROVIDER_KEY: &str = "gflow.hosting.provider";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Provider {
-    GitHub,
+    /// `repo` is `HOST/OWNER/REPO` from the origin remote, when it has that shape.
+    GitHub { repo: Option<String> },
     AzureDevOps { org: String, project: String, repo: String },
 }
 
@@ -31,8 +32,9 @@ pub fn detect(git: &dyn Git) -> Result<Provider> {
 /// - No override → parse the remote; unrecognized hosts and missing remotes
 ///   fall back to GitHub (preserves pre-detection behavior).
 fn resolve(remote_url: Option<&str>, override_val: Option<&str>) -> Result<Provider> {
+    let github = || Provider::GitHub { repo: remote_url.and_then(github_repo) };
     match override_val.map(str::trim) {
-        Some("github") => Ok(Provider::GitHub),
+        Some("github") => Ok(github()),
         Some("devops") => match remote_url.and_then(parse_remote) {
             Some(p @ Provider::AzureDevOps { .. }) => Ok(p),
             _ => Err(format!(
@@ -42,33 +44,45 @@ fn resolve(remote_url: Option<&str>, override_val: Option<&str>) -> Result<Provi
         Some(other) => Err(format!(
             "Invalid {PROVIDER_KEY} value '{other}'. Valid values: github, devops."
         )),
-        None => Ok(remote_url.and_then(parse_remote).unwrap_or(Provider::GitHub)),
+        None => Ok(remote_url.and_then(parse_remote).unwrap_or_else(github)),
     }
 }
 
-/// Parse a remote URL into a provider. Returns `None` for unrecognized hosts.
-fn parse_remote(url: &str) -> Option<Provider> {
+/// Split a remote URL into its host and path segments.
+fn split_remote(url: &str) -> Option<(&str, Vec<&str>)> {
     let url = url.trim().trim_end_matches('/');
     let url = url.strip_suffix(".git").unwrap_or(url);
 
-    // SSH scp-like syntax: git@host:path
-    if let Some(rest) = url.strip_prefix("git@") {
-        let (host, path) = rest.split_once(':')?;
-        return parse_host_path(host, path);
-    }
-
-    // URL syntax: scheme://[user@]host/path
-    let rest = url.split_once("://").map(|(_, r)| r)?;
-    let rest = rest.rsplit_once('@').map_or(rest, |(_, r)| r);
-    let (host, path) = rest.split_once('/')?;
-    parse_host_path(host, path)
+    let (host, path) = match url.strip_prefix("git@") {
+        // SSH scp-like syntax: git@host:path
+        Some(rest) => rest.split_once(':')?,
+        // URL syntax: scheme://[user@]host/path
+        None => {
+            let rest = url.split_once("://").map(|(_, r)| r)?;
+            let rest = rest.rsplit_once('@').map_or(rest, |(_, r)| r);
+            rest.split_once('/')?
+        }
+    };
+    Some((host, path.split('/').filter(|s| !s.is_empty()).collect()))
 }
 
-fn parse_host_path(host: &str, path: &str) -> Option<Provider> {
-    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+/// The `--repo` value gh needs to stay on origin. Without it, gh resolves the
+/// repository itself and prefers an `upstream` remote, which in a fork is the
+/// parent repository.
+fn github_repo(url: &str) -> Option<String> {
+    let (host, segments) = split_remote(url)?;
+    let host = host.split_once(':').map_or(host, |(name, _port)| name);
+    match segments.as_slice() {
+        [owner, repo] => Some(format!("{host}/{owner}/{repo}")),
+        _ => None,
+    }
+}
+
+/// Parse an Azure DevOps remote URL. Returns `None` for any other host.
+fn parse_remote(url: &str) -> Option<Provider> {
+    let (host, segments) = split_remote(url)?;
 
     match host {
-        "github.com" => Some(Provider::GitHub),
         // https://dev.azure.com/{org}/{project}/_git/{repo}
         "dev.azure.com" => match segments.as_slice() {
             [org, project, "_git", repo] => Some(azure(org, project, repo)),
@@ -114,13 +128,31 @@ mod tests {
         }
     }
 
+    fn github(repo: Option<&str>) -> Provider {
+        Provider::GitHub { repo: repo.map(str::to_string) }
+    }
+
     #[test]
-    fn parse_remote_recognizes_supported_remotes() {
+    fn github_repo_names_host_owner_and_repo() {
         for (case, remote, expected) in [
-            ("github_https", "https://github.com/acme/repo.git", Some(Provider::GitHub)),
-            ("github_https_without_git_suffix", "https://github.com/acme/repo", Some(Provider::GitHub)),
-            ("github_ssh_scp_style", "git@github.com:acme/repo.git", Some(Provider::GitHub)),
-            ("github_ssh_url", "ssh://git@github.com/acme/repo.git", Some(Provider::GitHub)),
+            ("https", "https://github.com/acme/repo.git", Some("github.com/acme/repo")),
+            ("https_without_git_suffix", "https://github.com/acme/repo", Some("github.com/acme/repo")),
+            ("https_with_user", "https://jop@github.com/acme/repo", Some("github.com/acme/repo")),
+            ("ssh_scp_style", "git@github.com:acme/repo.git", Some("github.com/acme/repo")),
+            ("ssh_url", "ssh://git@github.com/acme/repo.git", Some("github.com/acme/repo")),
+            ("enterprise_host", "https://github.enterprise.corp/acme/repo/", Some("github.enterprise.corp/acme/repo")),
+            ("ssh_url_with_port", "ssh://git@ghe.corp:2222/acme/repo.git", Some("ghe.corp/acme/repo")),
+            ("owner_only", "https://github.com/acme", None),
+            ("nested_group", "https://gitlab.com/group/sub/repo", None),
+            ("not_a_url", "not-a-url", None),
+        ] {
+            assert_eq!(github_repo(remote).as_deref(), expected, "{case}: {remote}");
+        }
+    }
+
+    #[test]
+    fn parse_remote_recognizes_azure_devops_remotes() {
+        for (case, remote, expected) in [
             ("devops_https", "https://dev.azure.com/beans/Shop/_git/backend", Some(ado("beans", "Shop", "backend"))),
             ("devops_https_with_user", "https://beans@dev.azure.com/beans/Shop/_git/backend", Some(ado("beans", "Shop", "backend"))),
             ("devops_https_percent_encoded_project", "https://dev.azure.com/beans/My%20Shop/_git/backend", Some(ado("beans", "My Shop", "backend"))),
@@ -135,7 +167,8 @@ mod tests {
     }
 
     #[test]
-    fn unrecognized_hosts_yield_none() {
+    fn non_azure_hosts_yield_none() {
+        assert_eq!(parse_remote("https://github.com/acme/repo.git"), None);
         assert_eq!(parse_remote("https://gitlab.com/acme/repo.git"), None);
         assert_eq!(parse_remote("https://github.enterprise.corp/acme/repo"), None);
         assert_eq!(parse_remote("not-a-url"), None);
@@ -144,8 +177,14 @@ mod tests {
 
     #[test]
     fn no_override_unrecognized_or_missing_remote_defaults_to_github() {
-        assert_eq!(resolve(Some("https://gitlab.com/a/b"), None), Ok(Provider::GitHub));
-        assert_eq!(resolve(None, None), Ok(Provider::GitHub));
+        assert_eq!(resolve(Some("https://gitlab.com/a/b/c"), None), Ok(github(None)));
+        assert_eq!(resolve(None, None), Ok(github(None)));
+    }
+
+    #[test]
+    fn a_github_remote_carries_its_repository() {
+        assert_eq!(resolve(Some("git@github.com:acme/repo.git"), None), Ok(github(Some("github.com/acme/repo"))));
+        assert_eq!(resolve(Some("https://ghe.corp/acme/repo"), Some("github")), Ok(github(Some("ghe.corp/acme/repo"))));
     }
 
     #[test]
@@ -160,7 +199,7 @@ mod tests {
     fn override_github_wins_over_ado_remote() {
         assert_eq!(
             resolve(Some("https://dev.azure.com/beans/Shop/_git/backend"), Some("github")),
-            Ok(Provider::GitHub),
+            Ok(github(None)),
         );
     }
 
