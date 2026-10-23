@@ -64,6 +64,13 @@ pub trait HostingPlatform {
     fn enable_auto_complete(&self, url: &str) -> Result<()>;
     /// Squash-merge the PR at `url` now and delete its head branch.
     fn merge_pr(&self, url: &str) -> Result<()>;
+    /// Merge the landing PR at `url` now with a merge commit. The landing
+    /// branch stays: gflow deletes it after the last leg, and `tip_landed_somewhere`
+    /// reads it until then.
+    fn merge_landing_pr(&self, url: &str) -> Result<()>;
+    /// Let the platform merge the landing PR at `url` with a merge commit once
+    /// its checks and reviews pass. The landing branch stays, as above.
+    fn enable_landing_auto_complete(&self, url: &str) -> Result<()>;
     /// Load the PRs of `head` now, while other work runs, for the lookups that
     /// follow. A provider whose lookups are cheap loads nothing.
     fn prefetch_prs(&self, _head: &str) -> Result<()> {

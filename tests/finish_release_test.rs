@@ -524,6 +524,8 @@ fn sync_protected_opens_develop_pr_and_stops() {
         "merged_pr_to:landing/release-1.1.0-into-develop:develop",
         "merged_pr_to:release/1.1.0:develop",
         "create_or_get_pr:landing/release-1.1.0-into-develop:develop:chore: sync release 1.1.0 with develop:empty-body",
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
         "copy_text:chore: sync release 1.1.0 with develop\nhttps://github.com/org/repo/pull/1",
         "open_url:https://github.com/org/repo/pull/1",
     ]);
@@ -574,6 +576,8 @@ fn sync_protected_stale_merged_pr_reopens_new_pr() {
         "merged_pr_to:landing/release-1.1.0-into-develop:develop",
         "merged_pr_to:release/1.1.0:develop",
         "create_or_get_pr:landing/release-1.1.0-into-develop:develop:chore: sync release 1.1.0 with develop:empty-body",
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
         "copy_text:chore: sync release 1.1.0 with develop\nhttps://github.com/org/repo/pull/1",
         "open_url:https://github.com/org/repo/pull/1",
     ]);
@@ -739,6 +743,8 @@ fn protected_patch_finish_opens_main_pr_without_any_tag_machinery() {
         "merged_pr_to:landing/release-1.1.0-into-main:main",
         "merged_pr_to:release/1.1.0:main",
         "create_or_get_pr:landing/release-1.1.0-into-main:main:chore: merge release 1.1.0 into main:empty-body",
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
         "copy_text:chore: merge release 1.1.0 into main\nhttps://github.com/org/repo/pull/1",
         "open_url:https://github.com/org/repo/pull/1",
     ]);
@@ -1045,6 +1051,8 @@ fn protected_finish_tags_merge_commit_then_opens_develop_pr() {
         "merged_pr_to:landing/release-1.1.0-into-develop:develop",
         "merged_pr_to:release/1.1.0:develop",
         "create_or_get_pr:landing/release-1.1.0-into-develop:develop:chore: merge release 1.1.0 into develop:empty-body",
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
         "copy_text:chore: merge release 1.1.0 into develop\nhttps://github.com/org/repo/pull/1",
         "open_url:https://github.com/org/repo/pull/1",
     ]);
@@ -1394,8 +1402,10 @@ fn protected_finish_keeps_the_branch_when_its_tip_landed_nowhere() {
     assert!(!calls.iter().any(|c| c.starts_with("delete_branch_local")), "unlanded commits must not be deleted; calls: {calls:?}");
     assert!(!calls.iter().any(|c| c.starts_with("delete_remote_branches")), "unlanded commits must not be deleted; calls: {calls:?}");
     let hosting_calls = hosting.calls();
-    assert_eq!(hosting_calls[hosting_calls.len() - 3..], [
+    assert_eq!(hosting_calls[hosting_calls.len() - 5..], [
         "create_or_get_pr:landing/release-1.1.0-into-develop:develop:chore: merge release 1.1.0 into develop:empty-body".to_string(),
+        "merge_landing_pr:https://github.com/org/repo/pull/1".to_string(),
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1".to_string(),
         "copy_text:chore: merge release 1.1.0 into develop\nhttps://github.com/org/repo/pull/1".to_string(),
         "open_url:https://github.com/org/repo/pull/1".to_string(),
     ], "the develop leg must re-open with a landing-branch PR and put it in the browser");
@@ -1437,6 +1447,8 @@ fn protected_finish_pushes_when_remote_branch_missing_before_opening_pr() {
         "merged_pr_to:landing/release-1.1.0-into-main:main",
         "merged_pr_to:release/1.1.0:main",
         "create_or_get_pr:landing/release-1.1.0-into-main:main:chore: merge release 1.1.0 into main:empty-body",
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
         "copy_text:chore: merge release 1.1.0 into main\nhttps://github.com/org/repo/pull/1",
         "open_url:https://github.com/org/repo/pull/1",
     ]);
@@ -1617,6 +1629,8 @@ fn protected_release_opens_main_pr_from_the_landing_branch() {
         "merged_pr_to:landing/release-1.1.0-into-main:main",
         "merged_pr_to:release/1.1.0:main",
         "create_or_get_pr:landing/release-1.1.0-into-main:main:chore: merge release 1.1.0 into main:empty-body",
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
         "copy_text:chore: merge release 1.1.0 into main\nhttps://github.com/org/repo/pull/1",
         "open_url:https://github.com/org/repo/pull/1",
     ]);
@@ -1709,8 +1723,10 @@ fn protected_release_whose_main_landed_untagged_tags_the_release_tip() {
     assert!(calls.contains(&"create_tag_at:v1.1.0:chore: release 1.1.0:relsha".to_string()),
         "the tag goes on the tested release tip, never on main's merge commit; calls: {calls:?}");
     let hosting_calls = hosting.calls();
-    assert_eq!(hosting_calls[hosting_calls.len() - 3..], [
+    assert_eq!(hosting_calls[hosting_calls.len() - 5..], [
         "create_or_get_pr:landing/release-1.1.0-into-develop:develop:chore: merge release 1.1.0 into develop:empty-body".to_string(),
+        "merge_landing_pr:https://github.com/org/repo/pull/1".to_string(),
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1".to_string(),
         "copy_text:chore: merge release 1.1.0 into develop\nhttps://github.com/org/repo/pull/1".to_string(),
         "open_url:https://github.com/org/repo/pull/1".to_string(),
     ]);
@@ -1743,8 +1759,10 @@ fn develop_leg_reopens_when_release_gained_commits_after_a_landed_sync() {
     assert!(!calls.contains(&"delete_branch_local:release/1.1.0".to_string()),
         "the finish must NOT complete while develop misses commits; calls: {calls:?}");
     let hosting_calls = hosting.calls();
-    assert_eq!(hosting_calls[hosting_calls.len() - 3..], [
+    assert_eq!(hosting_calls[hosting_calls.len() - 5..], [
         "create_or_get_pr:landing/release-1.1.0-into-develop:develop:chore: merge release 1.1.0 into develop:empty-body".to_string(),
+        "merge_landing_pr:https://github.com/org/repo/pull/1".to_string(),
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1".to_string(),
         "copy_text:chore: merge release 1.1.0 into develop\nhttps://github.com/org/repo/pull/1".to_string(),
         "open_url:https://github.com/org/repo/pull/1".to_string(),
     ]);
@@ -1797,8 +1815,10 @@ fn a_refreshed_landing_branch_is_not_mistaken_for_the_stale_merged_landing() {
                 "{refresh}: the resolution must be pushed; calls: {calls:?}");
         }
         let hosting_calls = hosting.calls();
-        assert_eq!(hosting_calls[hosting_calls.len() - 3..], [
+        assert_eq!(hosting_calls[hosting_calls.len() - 5..], [
             "create_or_get_pr:landing/release-1.1.0-into-develop:develop:chore: merge release 1.1.0 into develop:empty-body".to_string(),
+            "merge_landing_pr:https://github.com/org/repo/pull/1".to_string(),
+            "enable_landing_auto_complete:https://github.com/org/repo/pull/1".to_string(),
             "copy_text:chore: merge release 1.1.0 into develop\nhttps://github.com/org/repo/pull/1".to_string(),
             "open_url:https://github.com/org/repo/pull/1".to_string(),
         ], "{refresh}");
@@ -1826,8 +1846,10 @@ fn ensure_reuses_a_remote_landing_branch_that_gained_resolution_commits() {
     assert!(!calls.iter().any(|c| c.starts_with("push:landing/") || c.starts_with("create_branch_no_checkout:landing/") || c.starts_with("checkout:landing/")),
         "a remote landing branch that already contains the tip is reused untouched; calls: {calls:?}");
     let hosting_calls = hosting.calls();
-    assert_eq!(hosting_calls[hosting_calls.len() - 3..], [
+    assert_eq!(hosting_calls[hosting_calls.len() - 5..], [
         "create_or_get_pr:landing/release-1.1.0-into-develop:develop:chore: merge release 1.1.0 into develop:empty-body".to_string(),
+        "merge_landing_pr:https://github.com/org/repo/pull/1".to_string(),
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1".to_string(),
         "copy_text:chore: merge release 1.1.0 into develop\nhttps://github.com/org/repo/pull/1".to_string(),
         "open_url:https://github.com/org/repo/pull/1".to_string(),
     ]);
@@ -2775,4 +2797,128 @@ fn a_protected_rc_bump_does_not_reuse_the_cut_s_landed_version_pr() {
     assert_eq!(event, tag_event(HookEvent::ReleaseBump, "v1.1.0-rc.3"));
     assert!(git.calls().contains(&"create_tag:v1.1.0-rc.3:chore: bump version to v1.1.0-rc.3".to_string()), "{:?}", git.calls());
     assert!(!git.calls().iter().any(|c| c.starts_with("create_tag_at")), "{:?}", git.calls());
+}
+
+// --- Protected mode: gflow merges each landing PR at once ---
+
+/// A platform that merges landing PRs at once; the n-th merge lands the n-th
+/// leg, and after the fetch origin/<target> contains the landing branch.
+fn merging_landings(git: &mut MockGit, legs: &[(&str, &str, &str, &str)]) -> MockHosting {
+    let mut hosting = MockHosting::new();
+    hosting.landing_merge_error = None;
+    for (landing, target, head, merge) in legs {
+        git.ancestors.insert((landing.to_string(), format!("origin/{target}")));
+        git.ancestors.insert((merge.to_string(), format!("origin/{target}")));
+        git.parent_counts.insert(merge.to_string(), 2);
+        hosting.landed_on_landing_merge.push(((landing.to_string(), target.to_string()), landed(head, merge)));
+    }
+    hosting
+}
+
+fn release_ready_to_land() -> MockGit {
+    let mut git = MockGit::new();
+    git.current_branch = "release/1.1.0".to_string();
+    git.branch_shas.insert("release/1.1.0".to_string(), "relsha".to_string());
+    git.existing_local_branches.insert("release/1.1.0".to_string());
+    git.existing_remote_branches.insert("release/1.1.0".to_string());
+    git.pushed_branches.insert("release/1.1.0".to_string());
+    git
+}
+
+fn count(calls: &[String], prefix: &str) -> usize {
+    calls.iter().filter(|c| c.starts_with(prefix)).count()
+}
+
+#[test]
+fn protected_release_merges_each_landing_at_once_and_finishes_in_one_run() {
+    let mut git = release_ready_to_land();
+    git.tags_on_branch = vec!["v1.1.0-rc.2".to_string()];
+    git.existing_tags.insert("v1.1.0".to_string());
+    git.tag_commits.insert("v1.1.0".to_string(), "relsha".to_string());
+    git.existing_remote_tags.insert("v1.1.0".to_string());
+    let hosting = merging_landings(&mut git, &[
+        ("landing/release-1.1.0-into-main", "main", "relsha", "mc1"),
+        ("landing/release-1.1.0-into-develop", "develop", "relsha", "mc2"),
+    ]);
+
+    let event = finish_release(&git, &hosting, &protected_cfg(false), 1, 1, "main", None, false).unwrap();
+
+    assert_eq!(event, tag_event(HookEvent::ReleaseFinish, "v1.1.0"));
+    let calls = hosting.calls();
+    assert_eq!(count(&calls, "merge_landing_pr:"), 2, "calls: {calls:?}");
+    assert_eq!(count(&calls, "copy_text:") + count(&calls, "open_url:") + count(&calls, "enable_landing_auto_complete:"), 0,
+        "a merged landing needs no human; calls: {calls:?}");
+    assert_eq!(count(&git.calls(), "fetch"), 2, "each merge is fetched before the next leg");
+}
+
+#[test]
+fn protected_patch_release_merges_its_main_landing_at_once() {
+    let mut git = release_ready_to_land();
+    git.tags_on_branch = vec!["v1.1.0".to_string()];
+    git.ancestors.insert(("mc2".to_string(), "origin/develop".to_string()));
+    git.parent_counts.insert("mc2".to_string(), 2);
+    let mut hosting = merging_landings(&mut git, &[("landing/release-1.1.0-into-main", "main", "relsha", "mc1")]);
+    hosting.merged_prs_to.insert(("release/1.1.0".to_string(), "develop".to_string()), landed("relsha", "mc2"));
+
+    let event = finish_release(&git, &hosting, &patch_protected_cfg(), 1, 1, "main", None, false).unwrap();
+
+    assert_eq!(event, tag_event(HookEvent::ReleaseFinish, "v1.1.0"));
+    assert_eq!(count(&hosting.calls(), "merge_landing_pr:"), 1);
+}
+
+#[test]
+fn sync_protected_merges_the_landing_at_once() {
+    let mut git = release_ready_to_land();
+    let hosting = merging_landings(&mut git, &[("landing/release-1.1.0-into-develop", "develop", "relsha", "mc1")]);
+
+    sync_with_develop(&git, &hosting, &protected_cfg(false), 1, 1, None, false).unwrap();
+
+    let calls = hosting.calls();
+    assert_eq!(count(&calls, "merge_landing_pr:"), 1, "calls: {calls:?}");
+    assert_eq!(count(&calls, "create_or_get_pr:"), 1, "the second pass finds the leg landed; calls: {calls:?}");
+    assert_eq!(count(&calls, "copy_text:"), 0, "calls: {calls:?}");
+}
+
+#[test]
+fn a_merge_not_yet_visible_after_the_fetch_stops_instead_of_looping() {
+    let git = release_ready_to_land();
+    let mut hosting = MockHosting::new();
+    hosting.landing_merge_error = None;
+
+    sync_with_develop(&git, &hosting, &protected_cfg(false), 1, 1, None, false).unwrap();
+
+    let calls = hosting.calls();
+    assert_eq!(calls.last().map(String::as_str), Some("merge_landing_pr:https://github.com/org/repo/pull/1"), "calls: {calls:?}");
+    assert_eq!(count(&calls, "open_pr_to:"), 1, "no second pass; calls: {calls:?}");
+    assert!(git.calls().ends_with(&["fetch".to_string(), "is_ancestor:landing/release-1.1.0-into-develop:origin/develop".to_string()]));
+}
+
+#[test]
+fn a_landing_the_platform_cannot_complete_is_left_to_a_human() {
+    let git = release_ready_to_land();
+    let mut hosting = MockHosting::new();
+    hosting.landing_auto_complete_error = Some("auto-merge is not allowed".to_string());
+
+    sync_with_develop(&git, &hosting, &protected_cfg(false), 1, 1, None, false).unwrap();
+
+    let calls = hosting.calls();
+    assert_eq!(calls[calls.len() - 4..], [
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
+        "copy_text:chore: sync release 1.1.0 with develop\nhttps://github.com/org/repo/pull/1",
+        "open_url:https://github.com/org/repo/pull/1",
+    ]);
+}
+
+#[test]
+fn a_fetch_failure_after_a_merge_stops_the_run_without_failing_it() {
+    // The PR is merged on the platform; a re-run picks the leg up as landed.
+    let mut git = release_ready_to_land();
+    git.fail_call = Some(("fetch".to_string(), 1));
+    let mut hosting = MockHosting::new();
+    hosting.landing_merge_error = None;
+
+    sync_with_develop(&git, &hosting, &protected_cfg(false), 1, 1, None, false).unwrap();
+
+    assert_eq!(count(&hosting.calls(), "open_pr_to:"), 1, "no second pass");
 }

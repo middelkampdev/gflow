@@ -663,3 +663,32 @@ fn az_completion_failure_names_the_login_commands() {
 
     assert!(err.starts_with("TF401027: permission\n"), "{err}");
 }
+
+// --- Completing landing PRs (merge commit, landing branch kept) ---
+
+#[test]
+fn gh_lands_a_landing_pr_with_a_merge_commit_and_keeps_its_branch() {
+    let runner = MockCliRunner::scripted(&[Ok(""), Ok("")]);
+
+    gh(&runner).merge_landing_pr("https://github.com/o/r/pull/9").unwrap();
+    gh(&runner).enable_landing_auto_complete("https://github.com/o/r/pull/9").unwrap();
+
+    assert_eq!(runner.calls(), vec![
+        "gh pr merge https://github.com/o/r/pull/9 --merge",
+        "gh pr merge https://github.com/o/r/pull/9 --auto --merge",
+    ]);
+}
+
+#[test]
+fn az_lands_a_landing_pr_with_a_merge_commit_and_keeps_its_branch() {
+    let runner = az_scripted(&[Ok(""), Ok("")]);
+
+    let ado = ado(&runner);
+    ado.merge_landing_pr("https://dev.azure.com/beans/Shop/_git/shop/pullrequest/9").unwrap();
+    ado.enable_landing_auto_complete("https://dev.azure.com/beans/Shop/_git/shop/pullrequest/9").unwrap();
+
+    assert_eq!(az_calls(&runner), vec![
+        "az repos pr update --id 9 --organization https://dev.azure.com/beans --status completed --squash false --delete-source-branch false",
+        "az repos pr update --id 9 --organization https://dev.azure.com/beans --auto-complete true --squash false --delete-source-branch false",
+    ]);
+}
