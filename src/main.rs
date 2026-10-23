@@ -136,7 +136,7 @@ fn run(command: Option<Commands>) -> Result<(), String> {
 /// missing CLI or expired login surfaces on the first real call instead.
 fn create_hosting(git: &dyn Git) -> Result<Box<dyn HostingPlatform>, String> {
     Ok(match detect::detect(git)? {
-        Provider::GitHub => Box::new(GitHub::new(&SystemCli)),
+        Provider::GitHub { repo } => Box::new(GitHub::new(repo, &SystemCli)),
         Provider::AzureDevOps { org, project, repo } => Box::new(AzureDevOps::new(org, project, repo, &SystemCli)),
     })
 }

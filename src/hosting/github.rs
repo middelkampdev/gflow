@@ -3,16 +3,20 @@ use super::{resolve_body_file, CliRunner, PrBody, HostingPlatform, LandedPr, Mer
 const AUTH_REMEDY: &str = "If authentication expired, run 'gh auth login', then re-run 'gflow finish'.";
 
 pub struct GitHub<'a> {
+    repo: Option<String>,
     runner: &'a dyn CliRunner,
 }
 
 impl<'a> GitHub<'a> {
-    pub fn new(runner: &'a dyn CliRunner) -> Self {
-        Self { runner }
+    pub fn new(repo: Option<String>, runner: &'a dyn CliRunner) -> Self {
+        Self { repo, runner }
     }
 
     fn run_gh(&self, args: &[&str]) -> Result<String> {
-        self.runner.run("gh", args)
+        match &self.repo {
+            Some(repo) => self.runner.run("gh", &[args, &["--repo", repo]].concat()),
+            None => self.runner.run("gh", args),
+        }
     }
 }
 
