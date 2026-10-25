@@ -219,7 +219,7 @@ Not available for `start release`.
 
 `gflow` without arguments is **interactive** and requires a TTY for its menu prompts. However, when all required arguments are provided (as shown in the Command Reference above), `gflow` runs **non-interactively** and is safe to use from AI agents, CI pipelines, and scripts.
 
-**Rule:** Always provide all required arguments so the command runs non-interactively. Never run bare `gflow` without arguments from a non-interactive context.
+**Rule:** Always provide all required arguments so the command runs non-interactively. Never run bare `gflow` without arguments from a non-interactive context. `No terminal to answer '<question>'` means a flag is missing: `Release type` → `--major|--minor`, `PR target branch` → `--base`, `Contains breaking changes?` → `--breaking[=false]`.
 
 **The repo must be initialised** (`.gflow/config` committed, or a `~/.gflow/config` supplying the policy) — subcommands refuse otherwise; run `gflow init` once interactively.
 
