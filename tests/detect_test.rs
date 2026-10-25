@@ -31,7 +31,14 @@ fn the_configured_override_wins_over_the_remote() {
     git.remote_url = "https://dev.azure.com/beans/Shop/_git/backend".to_string();
     git.config.insert("gflow.hosting.provider".to_string(), "github".to_string());
 
-    assert_eq!(detect(&git).unwrap(), Provider::GitHub);
+    assert_eq!(detect(&git).unwrap(), Provider::GitHub { repo: None });
+}
+
+#[test]
+fn a_github_origin_names_the_repository_gh_must_use() {
+    let git = MockGit::new();
+
+    assert_eq!(detect(&git).unwrap(), Provider::GitHub { repo: Some("github.com/acme/repo".to_string()) });
 }
 
 #[test]
@@ -41,7 +48,7 @@ fn a_repo_without_an_origin_remote_falls_back_to_github() {
     let mut git = MockGit::new();
     git.fail_remote_url = true;
 
-    assert_eq!(detect(&git).unwrap(), Provider::GitHub);
+    assert_eq!(detect(&git).unwrap(), Provider::GitHub { repo: None });
 }
 
 #[test]

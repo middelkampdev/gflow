@@ -37,6 +37,8 @@ cargo install --path .
 
 gflow auto-detects the hosting provider from the `origin` remote URL: `dev.azure.com` and `*.visualstudio.com` remotes use Azure DevOps (org/project/repo are parsed from the URL), everything else uses GitHub. Only the CLI of the detected provider needs to be installed.
 
+On GitHub, gflow passes the `origin` repository to every `gh` call (`--repo HOST/OWNER/REPO`). In a fork with an `upstream` remote, PRs therefore stay in your fork's repository instead of the parent.
+
 To override detection (e.g. a GitHub Enterprise domain), set:
 
 ```bash

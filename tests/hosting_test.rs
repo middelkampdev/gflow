@@ -13,7 +13,7 @@ use gflow::hosting::{HostingPlatform, PrBody};
 // design — tests never touch installed CLIs.
 
 fn gh(runner: &MockCliRunner) -> GitHub<'_> {
-    GitHub::new(runner)
+    GitHub::new(None, runner)
 }
 
 fn ado(runner: &MockCliRunner) -> AzureDevOps<'_> {
@@ -116,6 +116,25 @@ fn an_open_pr_to_a_different_base_is_not_reused() {
     assert_eq!(url, "https://github.com/o/r/pull/11");
     assert_eq!(runner.calls()[0],
         "gh pr list --head hotfix/1.2.4 --base release/1.2.0 --state open --limit 1 --json url --jq .[0].url // empty");
+}
+
+#[test]
+fn gh_pins_every_call_to_the_origin_repository() {
+    // In a fork, gh prefers an `upstream` remote over origin. Without --repo,
+    // gflow would look up and open PRs in the parent repository.
+    let runner = MockCliRunner::scripted(&[Ok(""), Ok("https://github.com/acme/repo/pull/8"), Ok(""), Ok(""), Ok(""), Ok("")]);
+    let gh = GitHub::new(Some("github.com/acme/repo".to_string()), &runner);
+
+    gh.create_or_get_pr("feature/x", "develop", "feat: x", PrBody::NativeDefault).unwrap();
+    gh.merged_pr("feature/x").unwrap();
+    gh.merged_pr_to("feature/x", "develop").unwrap();
+    gh.open_pr_to("feature/x", "develop").unwrap();
+
+    let calls = runner.calls();
+    assert_eq!(calls.len(), 5);
+    for call in calls {
+        assert!(call.ends_with(" --repo github.com/acme/repo"), "got: {call}");
+    }
 }
 
 // --- GitHub: merged_pr ---
@@ -520,7 +539,7 @@ fn az_open_pr_to_empty_result_is_none() {
 #[test]
 fn github_open_pr_failure_keeps_the_authentication_remedy() {
     let runner = MockCliRunner::scripted(&[Err("HTTP 401")]);
-    let error = GitHub::new(&runner)
+    let error = GitHub::new(None, &runner)
         .open_pr_to("release/1.0.0", "main")
         .unwrap_err();
     assert!(error.contains("Could not check for an open PR: HTTP 401"));

@@ -227,7 +227,7 @@ Not available for `start release`.
 
 gflow checks `git` at startup; `gh`/`az` and their login are checked on first use (a failure names the fix — re-run after fixing):
 - `git` must be installed
-- The hosting provider is auto-detected from the origin remote URL (`dev.azure.com` / `*.visualstudio.com` → Azure DevOps, else GitHub); override with `git config gflow.hosting.provider github|devops`
+- The hosting provider is auto-detected from the origin remote URL (`dev.azure.com` / `*.visualstudio.com` → Azure DevOps, else GitHub); override with `git config gflow.hosting.provider github|devops`. On GitHub every `gh` call targets the `origin` repository, also in a fork with an `upstream` remote
 - GitHub repos: `gh` installed + `gh auth login` completed
 - Azure DevOps repos: `az` installed + `az extension add --name azure-devops` + authenticated (`az login`, or a PAT via `az devops login`)
 - Uncommitted changes are auto-stashed and restored after the operation
