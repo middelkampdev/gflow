@@ -6,7 +6,7 @@
   "keep-release-branches": "true"
  },
  "rules": [
-  "main, develop, release/* and hotfix/* change only through PRs. Each leg of a finish or sync travels on landing/<source>-into-<target>: gflow creates it from the source, merges the target in (also when that changes nothing), and opens the PR. A reviewer merges it with a MERGE COMMIT.",
+  "main, develop, release/* and hotfix/* change only through PRs. Each leg of a finish or sync travels on landing/<source>-into-<target>: gflow creates it from the source, merges the target in (also when that changes nothing), and opens the PR. gflow merges it at once with a MERGE COMMIT and goes on with the next landing in the same run. When the platform cannot merge it yet (checks or reviews pending), gflow turns on auto-complete and stops; re-run the command after it merged.",
   "Every version change travels on version/X.Y.Z-into-<target>: the release cut, gflow bump, and the hotfix start. gflow squash-merges it and deletes it in the same call.",
   "Develop gets no version bump. Its VERSION file only changes when a release or hotfix lands on it.",
   "Every tag sits on the release or hotfix branch, on the exact commit that was tested, never on a merge commit on main. The merge into main carries the tagged commit as its second parent. A version change's tag sits on its version branch's squash commit.",
@@ -666,7 +666,7 @@
     ]
    },
    "deployVersions": {
-    "develop": "0.2.0+1",
+    "develop": "0.2.0+2",
     "release/0.1.0": "0.1.1+3"
    },
    "frames": [
@@ -694,26 +694,10 @@
        "method": "merge"
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.1.0",
-   "actor": "reviewer",
-   "run": {
-    "merge": {
-     "pr": 6,
-     "method": "merge"
-    }
-   },
-   "deployVersions": {
-    "develop": "0.2.0+2",
-    "release/0.1.0": "0.1.1+3"
-   },
-   "frames": [
+    },
     {
-     "cmd": "Merge (merge commit) PR #6",
-     "text": "The reviewer completes PR #6 with a MERGE COMMIT. landing/release-0.1.0-into-develop is merged into develop with a merge commit (VERSION 0.1.1). PR #6 is merged.",
+     "cmd": "gflow sync   # merges PR #6",
+     "text": "gflow completes PR #6 with a MERGE COMMIT. landing/release-0.1.0-into-develop is merged into develop with a merge commit (VERSION 0.1.1). PR #6 is merged.",
      "ops": [
       {
        "op": "merge",
@@ -727,25 +711,9 @@
        "pr": 6
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.1.0",
-   "actor": "gflow",
-   "on": "release/0.1.0",
-   "run": {
-    "gflow": [
-     "sync"
-    ]
-   },
-   "deployVersions": {
-    "develop": "0.2.0+2",
-    "release/0.1.0": "0.1.1+3"
-   },
-   "frames": [
+    },
     {
-     "cmd": "gflow sync   # re-run",
+     "cmd": "gflow sync   # next landing",
      "text": "gflow says: Develop already contains release/0.1.0. Nothing changes on origin.",
      "ops": []
     }
@@ -1004,7 +972,7 @@
     ]
    },
    "deployVersions": {
-    "develop": "0.2.0+2",
+    "develop": "0.2.0+3",
     "release/0.1.0": "0.1.2+5"
    },
    "frames": [
@@ -1032,26 +1000,10 @@
        "method": "merge"
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.1.0",
-   "actor": "reviewer",
-   "run": {
-    "merge": {
-     "pr": 9,
-     "method": "merge"
-    }
-   },
-   "deployVersions": {
-    "develop": "0.2.0+2",
-    "release/0.1.0": "0.1.2+5"
-   },
-   "frames": [
+    },
     {
-     "cmd": "Merge (merge commit) PR #9",
-     "text": "The reviewer completes PR #9 with a MERGE COMMIT. landing/release-0.1.0-into-main is merged into main with a merge commit (VERSION 0.1.2). PR #9 is merged.",
+     "cmd": "gflow finish   # merges PR #9",
+     "text": "gflow completes PR #9 with a MERGE COMMIT. landing/release-0.1.0-into-main is merged into main with a merge commit (VERSION 0.1.2). PR #9 is merged.",
      "ops": [
       {
        "op": "merge",
@@ -1065,25 +1017,9 @@
        "pr": 9
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.1.0",
-   "actor": "gflow",
-   "on": "release/0.1.0",
-   "run": {
-    "gflow": [
-     "finish"
-    ]
-   },
-   "deployVersions": {
-    "develop": "0.2.0+2",
-    "release/0.1.0": "0.1.2+5"
-   },
-   "frames": [
+    },
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish   # next landing",
      "text": "The develop landing PR merged before the latest release/0.1.0 commits, so gflow refreshes landing/release-0.1.0-into-develop and opens a fresh PR. release/0.1.0 is merged into landing/release-0.1.0-into-develop with a merge commit (VERSION 0.1.2). develop is merged into landing/release-0.1.0-into-develop with a merge commit (VERSION 0.1.2). PR #10 opens: landing/release-0.1.0-into-develop into develop (MERGE COMMIT).",
      "ops": [
       {
@@ -1108,25 +1044,9 @@
        "method": "merge"
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.1.0",
-   "actor": "reviewer",
-   "run": {
-    "merge": {
-     "pr": 10,
-     "method": "merge"
-    }
-   },
-   "deployVersions": {
-    "develop": "0.2.0+3",
-    "release/0.1.0": "0.1.2+5"
-   },
-   "frames": [
+    },
     {
-     "cmd": "Merge (merge commit) PR #10",
+     "cmd": "gflow finish   # merges PR #10",
      "ops": [
       {
        "op": "merge",
@@ -1140,26 +1060,10 @@
        "pr": 10
       }
      ],
-     "text": "The reviewer completes PR #10 with a MERGE COMMIT. landing/release-0.1.0-into-develop is merged into develop with a merge commit (VERSION 0.1.2). PR #10 is merged."
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.1.0",
-   "actor": "gflow",
-   "on": "release/0.1.0",
-   "run": {
-    "gflow": [
-     "finish"
-    ]
-   },
-   "deployVersions": {
-    "develop": "0.2.0+3",
-    "release/0.1.0": "0.1.2+5"
-   },
-   "frames": [
+     "text": "gflow completes PR #10 with a MERGE COMMIT. landing/release-0.1.0-into-develop is merged into develop with a merge commit (VERSION 0.1.2). PR #10 is merged."
+    },
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish   # next landing",
      "text": "Hook release-finish runs with GFLOW_TAG=v0.1.2 (final) for release/0.1.0. landing/release-0.1.0-into-develop is deleted. landing/release-0.1.0-into-main is deleted.",
      "ops": [
       {
@@ -1547,7 +1451,7 @@
     ]
    },
    "deployVersions": {
-    "develop": "0.2.0+4",
+    "develop": "0.2.0+5",
     "hotfix/0.1.3": "0.1.3+2",
     "release/0.1.0": "0.1.2+5"
    },
@@ -1581,27 +1485,10 @@
        "method": "merge"
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Hotfix 0.1.3",
-   "actor": "reviewer",
-   "run": {
-    "merge": {
-     "pr": 14,
-     "method": "merge"
-    }
-   },
-   "deployVersions": {
-    "develop": "0.2.0+4",
-    "hotfix/0.1.3": "0.1.3+2",
-    "release/0.1.0": "0.1.2+5"
-   },
-   "frames": [
+    },
     {
-     "cmd": "Merge (merge commit) PR #14",
-     "text": "The reviewer completes PR #14 with a MERGE COMMIT. landing/hotfix-0.1.3-into-main is merged into main with a merge commit (VERSION 0.1.3). PR #14 is merged.",
+     "cmd": "gflow finish   # merges PR #14",
+     "text": "gflow completes PR #14 with a MERGE COMMIT. landing/hotfix-0.1.3-into-main is merged into main with a merge commit (VERSION 0.1.3). PR #14 is merged.",
      "ops": [
       {
        "op": "merge",
@@ -1615,26 +1502,9 @@
        "pr": 14
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Hotfix 0.1.3",
-   "actor": "gflow",
-   "on": "hotfix/0.1.3",
-   "run": {
-    "gflow": [
-     "finish"
-    ]
-   },
-   "deployVersions": {
-    "develop": "0.2.0+4",
-    "hotfix/0.1.3": "0.1.3+2",
-    "release/0.1.0": "0.1.2+5"
-   },
-   "frames": [
+    },
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish   # next landing",
      "text": "landing/hotfix-0.1.3-into-develop starts from hotfix/0.1.3. develop is merged into landing/hotfix-0.1.3-into-develop with a merge commit (VERSION 0.1.3). PR #15 opens: landing/hotfix-0.1.3-into-develop into develop (MERGE COMMIT).",
      "ops": [
       {
@@ -1657,27 +1527,10 @@
        "method": "merge"
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Hotfix 0.1.3",
-   "actor": "reviewer",
-   "run": {
-    "merge": {
-     "pr": 15,
-     "method": "merge"
-    }
-   },
-   "deployVersions": {
-    "develop": "0.2.0+5",
-    "hotfix/0.1.3": "0.1.3+2",
-    "release/0.1.0": "0.1.2+5"
-   },
-   "frames": [
+    },
     {
-     "cmd": "Merge (merge commit) PR #15",
-     "text": "The reviewer completes PR #15 with a MERGE COMMIT. landing/hotfix-0.1.3-into-develop is merged into develop with a merge commit (VERSION 0.1.3). PR #15 is merged.",
+     "cmd": "gflow finish   # merges PR #15",
+     "text": "gflow completes PR #15 with a MERGE COMMIT. landing/hotfix-0.1.3-into-develop is merged into develop with a merge commit (VERSION 0.1.3). PR #15 is merged.",
      "ops": [
       {
        "op": "merge",
@@ -1691,26 +1544,9 @@
        "pr": 15
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Hotfix 0.1.3",
-   "actor": "gflow",
-   "on": "hotfix/0.1.3",
-   "run": {
-    "gflow": [
-     "finish"
-    ]
-   },
-   "deployVersions": {
-    "develop": "0.2.0+5",
-    "hotfix/0.1.3": "0.1.3+2",
-    "release/0.1.0": "0.1.2+5"
-   },
-   "frames": [
+    },
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish   # next landing",
      "text": "Hook hotfix-finish runs with GFLOW_TAG=v0.1.3 (final) for hotfix/0.1.3. landing/hotfix-0.1.3-into-main is deleted. landing/hotfix-0.1.3-into-develop is deleted.",
      "ops": [
       {
@@ -2390,29 +2226,10 @@
        "method": "merge"
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.2.0 + hotfix",
-   "actor": "reviewer",
-   "run": {
-    "merge": {
-     "pr": 21,
-     "method": "merge"
-    }
-   },
-   "deployVersions": {
-    "develop": "0.3.0+1",
-    "hotfix/0.1.3": "0.1.3+2",
-    "hotfix/0.1.4": "0.1.4+2",
-    "release/0.1.0": "0.1.2+5",
-    "release/0.2.0": "0.2.0+2"
-   },
-   "frames": [
+    },
     {
-     "cmd": "Merge (merge commit) PR #21",
-     "text": "The reviewer completes PR #21 with a MERGE COMMIT. landing/hotfix-0.1.4-into-main is merged into main with a merge commit (VERSION 0.1.4). PR #21 is merged.",
+     "cmd": "gflow finish   # merges PR #21",
+     "text": "gflow completes PR #21 with a MERGE COMMIT. landing/hotfix-0.1.4-into-main is merged into main with a merge commit (VERSION 0.1.4). PR #21 is merged.",
      "ops": [
       {
        "op": "merge",
@@ -2426,28 +2243,9 @@
        "pr": 21
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.2.0 + hotfix",
-   "actor": "gflow",
-   "on": "hotfix/0.1.4",
-   "run": {
-    "gflow": [
-     "finish"
-    ]
-   },
-   "deployVersions": {
-    "develop": "0.3.0+1",
-    "hotfix/0.1.3": "0.1.3+2",
-    "hotfix/0.1.4": "0.1.4+2",
-    "release/0.1.0": "0.1.2+5",
-    "release/0.2.0": "0.2.0+2"
-   },
-   "frames": [
+    },
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish   # next landing",
      "text": "gflow merges locally (\"chore: merge release/0.2.0 into landing/hotfix-0.1.4-into-release-0.2.0\") and VERSION conflicts. gflow stops mid-merge on landing/hotfix-0.1.4-into-release-0.2.0. Nothing changes on origin.",
      "ops": [],
      "flag": "conflict"
@@ -2486,11 +2284,11 @@
     ]
    },
    "deployVersions": {
-    "develop": "0.3.0+1",
+    "develop": "0.3.0+2",
     "hotfix/0.1.3": "0.1.3+2",
     "hotfix/0.1.4": "0.1.4+2",
     "release/0.1.0": "0.1.2+5",
-    "release/0.2.0": "0.2.0+2"
+    "release/0.2.0": "0.2.0+3"
    },
    "frames": [
     {
@@ -2517,29 +2315,10 @@
        "method": "merge"
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.2.0 + hotfix",
-   "actor": "reviewer",
-   "run": {
-    "merge": {
-     "pr": 22,
-     "method": "merge"
-    }
-   },
-   "deployVersions": {
-    "develop": "0.3.0+1",
-    "hotfix/0.1.3": "0.1.3+2",
-    "hotfix/0.1.4": "0.1.4+2",
-    "release/0.1.0": "0.1.2+5",
-    "release/0.2.0": "0.2.0+3"
-   },
-   "frames": [
+    },
     {
-     "cmd": "Merge (merge commit) PR #22",
-     "text": "The reviewer completes PR #22 with a MERGE COMMIT. landing/hotfix-0.1.4-into-release-0.2.0 is merged into release/0.2.0 with a merge commit (VERSION 0.2.0). PR #22 is merged.",
+     "cmd": "gflow finish   # merges PR #22",
+     "text": "gflow completes PR #22 with a MERGE COMMIT. landing/hotfix-0.1.4-into-release-0.2.0 is merged into release/0.2.0 with a merge commit (VERSION 0.2.0). PR #22 is merged.",
      "ops": [
       {
        "op": "merge",
@@ -2553,28 +2332,9 @@
        "pr": 22
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.2.0 + hotfix",
-   "actor": "gflow",
-   "on": "hotfix/0.1.4",
-   "run": {
-    "gflow": [
-     "finish"
-    ]
-   },
-   "deployVersions": {
-    "develop": "0.3.0+1",
-    "hotfix/0.1.3": "0.1.3+2",
-    "hotfix/0.1.4": "0.1.4+2",
-    "release/0.1.0": "0.1.2+5",
-    "release/0.2.0": "0.2.0+3"
-   },
-   "frames": [
+    },
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish   # next landing",
      "text": "landing/hotfix-0.1.4-into-develop starts from hotfix/0.1.4. develop is merged into landing/hotfix-0.1.4-into-develop with a merge commit (VERSION 0.1.4). PR #23 opens: landing/hotfix-0.1.4-into-develop into develop (MERGE COMMIT).",
      "ops": [
       {
@@ -2597,29 +2357,10 @@
        "method": "merge"
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.2.0 + hotfix",
-   "actor": "reviewer",
-   "run": {
-    "merge": {
-     "pr": 23,
-     "method": "merge"
-    }
-   },
-   "deployVersions": {
-    "develop": "0.3.0+2",
-    "hotfix/0.1.3": "0.1.3+2",
-    "hotfix/0.1.4": "0.1.4+2",
-    "release/0.1.0": "0.1.2+5",
-    "release/0.2.0": "0.2.0+3"
-   },
-   "frames": [
+    },
     {
-     "cmd": "Merge (merge commit) PR #23",
-     "text": "The reviewer completes PR #23 with a MERGE COMMIT. landing/hotfix-0.1.4-into-develop is merged into develop with a merge commit (VERSION 0.1.4). PR #23 is merged.",
+     "cmd": "gflow finish   # merges PR #23",
+     "text": "gflow completes PR #23 with a MERGE COMMIT. landing/hotfix-0.1.4-into-develop is merged into develop with a merge commit (VERSION 0.1.4). PR #23 is merged.",
      "ops": [
       {
        "op": "merge",
@@ -2633,28 +2374,9 @@
        "pr": 23
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.2.0 + hotfix",
-   "actor": "gflow",
-   "on": "hotfix/0.1.4",
-   "run": {
-    "gflow": [
-     "finish"
-    ]
-   },
-   "deployVersions": {
-    "develop": "0.3.0+2",
-    "hotfix/0.1.3": "0.1.3+2",
-    "hotfix/0.1.4": "0.1.4+2",
-    "release/0.1.0": "0.1.2+5",
-    "release/0.2.0": "0.2.0+3"
-   },
-   "frames": [
+    },
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish   # next landing",
      "text": "Hook hotfix-finish runs with GFLOW_TAG=v0.1.4 (final) for hotfix/0.1.4. landing/hotfix-0.1.4-into-main is deleted. landing/hotfix-0.1.4-into-develop is deleted. landing/hotfix-0.1.4-into-release-0.2.0 is deleted.",
      "ops": [
       {
@@ -2785,7 +2507,7 @@
     ]
    },
    "deployVersions": {
-    "develop": "0.3.0+2",
+    "develop": "0.3.0+3",
     "hotfix/0.1.3": "0.1.3+2",
     "hotfix/0.1.4": "0.1.4+2",
     "release/0.1.0": "0.1.2+5",
@@ -2816,29 +2538,10 @@
        "method": "merge"
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.2.0 + hotfix",
-   "actor": "reviewer",
-   "run": {
-    "merge": {
-     "pr": 25,
-     "method": "merge"
-    }
-   },
-   "deployVersions": {
-    "develop": "0.3.0+2",
-    "hotfix/0.1.3": "0.1.3+2",
-    "hotfix/0.1.4": "0.1.4+2",
-    "release/0.1.0": "0.1.2+5",
-    "release/0.2.0": "0.2.1+4"
-   },
-   "frames": [
+    },
     {
-     "cmd": "Merge (merge commit) PR #25",
-     "text": "The reviewer completes PR #25 with a MERGE COMMIT. landing/release-0.2.0-into-main is merged into main with a merge commit (VERSION 0.2.1). PR #25 is merged.",
+     "cmd": "gflow finish   # merges PR #25",
+     "text": "gflow completes PR #25 with a MERGE COMMIT. landing/release-0.2.0-into-main is merged into main with a merge commit (VERSION 0.2.1). PR #25 is merged.",
      "ops": [
       {
        "op": "merge",
@@ -2852,28 +2555,9 @@
        "pr": 25
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.2.0 + hotfix",
-   "actor": "gflow",
-   "on": "release/0.2.0",
-   "run": {
-    "gflow": [
-     "finish"
-    ]
-   },
-   "deployVersions": {
-    "develop": "0.3.0+2",
-    "hotfix/0.1.3": "0.1.3+2",
-    "hotfix/0.1.4": "0.1.4+2",
-    "release/0.1.0": "0.1.2+5",
-    "release/0.2.0": "0.2.1+4"
-   },
-   "frames": [
+    },
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish   # next landing",
      "text": "landing/release-0.2.0-into-develop starts from release/0.2.0. develop is merged into landing/release-0.2.0-into-develop with a merge commit (VERSION 0.2.1). PR #26 opens: landing/release-0.2.0-into-develop into develop (MERGE COMMIT).",
      "ops": [
       {
@@ -2896,29 +2580,10 @@
        "method": "merge"
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.2.0 + hotfix",
-   "actor": "reviewer",
-   "run": {
-    "merge": {
-     "pr": 26,
-     "method": "merge"
-    }
-   },
-   "deployVersions": {
-    "develop": "0.3.0+3",
-    "hotfix/0.1.3": "0.1.3+2",
-    "hotfix/0.1.4": "0.1.4+2",
-    "release/0.1.0": "0.1.2+5",
-    "release/0.2.0": "0.2.1+4"
-   },
-   "frames": [
+    },
     {
-     "cmd": "Merge (merge commit) PR #26",
-     "text": "The reviewer completes PR #26 with a MERGE COMMIT. landing/release-0.2.0-into-develop is merged into develop with a merge commit (VERSION 0.2.1). PR #26 is merged.",
+     "cmd": "gflow finish   # merges PR #26",
+     "text": "gflow completes PR #26 with a MERGE COMMIT. landing/release-0.2.0-into-develop is merged into develop with a merge commit (VERSION 0.2.1). PR #26 is merged.",
      "ops": [
       {
        "op": "merge",
@@ -2932,28 +2597,9 @@
        "pr": 26
       }
      ]
-    }
-   ]
-  },
-  {
-   "phase": "Release 0.2.0 + hotfix",
-   "actor": "gflow",
-   "on": "release/0.2.0",
-   "run": {
-    "gflow": [
-     "finish"
-    ]
-   },
-   "deployVersions": {
-    "develop": "0.3.0+3",
-    "hotfix/0.1.3": "0.1.3+2",
-    "hotfix/0.1.4": "0.1.4+2",
-    "release/0.1.0": "0.1.2+5",
-    "release/0.2.0": "0.2.1+4"
-   },
-   "frames": [
+    },
     {
-     "cmd": "gflow finish   # re-run",
+     "cmd": "gflow finish   # next landing",
      "text": "Hook release-finish runs with GFLOW_TAG=v0.2.1 (final) for release/0.2.0. landing/release-0.2.0-into-main is deleted. landing/release-0.2.0-into-develop is deleted.",
      "ops": [
       {

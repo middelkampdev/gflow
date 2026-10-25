@@ -12,6 +12,11 @@ const PR_LIST_LIMIT: usize = 1000;
 
 const AUTH_REMEDY: &str = "If you are not signed in, run 'az login' (or 'az devops login' with a PAT), then re-run gflow.";
 
+/// Version PRs: squash and delete the source branch, like the SQUASH banner asks.
+const SQUASH_AND_DELETE: [&str; 4] = ["--squash", "true", "--delete-source-branch", "true"];
+/// Landing PRs: a merge commit, and the landing branch stays until gflow's cleanup.
+const MERGE_AND_KEEP: [&str; 4] = ["--squash", "false", "--delete-source-branch", "false"];
+
 pub struct AzureDevOps<'a> {
     org: String,
     project: String,
@@ -66,14 +71,11 @@ impl<'a> AzureDevOps<'a> {
         )
     }
 
-    /// Every completion squashes and deletes the source branch, like the
-    /// SQUASH banner asks a human to.
-    fn update_pr(&self, url: &str, how: &[&str]) -> Result<()> {
+    fn update_pr(&self, url: &str, how: &[&str], completion: &[&str]) -> Result<()> {
         let id = validate_pr_id(url.rsplit('/').next().unwrap_or_default())?;
         let mut args: Vec<String> = ["repos", "pr", "update", "--id", id, "--organization"].map(String::from).to_vec();
         args.push(self.org_url());
-        args.extend(how.iter().map(|a| a.to_string()));
-        args.extend(["--squash", "true", "--delete-source-branch", "true"].map(String::from));
+        args.extend(how.iter().chain(completion).map(|a| a.to_string()));
         self.run_az(&args).map(|_| ())
     }
 
@@ -280,11 +282,19 @@ impl HostingPlatform for AzureDevOps<'_> {
     }
 
     fn enable_auto_complete(&self, url: &str) -> Result<()> {
-        self.update_pr(url, &["--auto-complete", "true"])
+        self.update_pr(url, &["--auto-complete", "true"], &SQUASH_AND_DELETE)
     }
 
     fn merge_pr(&self, url: &str) -> Result<()> {
-        self.update_pr(url, &["--status", "completed"])
+        self.update_pr(url, &["--status", "completed"], &SQUASH_AND_DELETE)
+    }
+
+    fn merge_landing_pr(&self, url: &str) -> Result<()> {
+        self.update_pr(url, &["--status", "completed"], &MERGE_AND_KEEP)
+    }
+
+    fn enable_landing_auto_complete(&self, url: &str) -> Result<()> {
+        self.update_pr(url, &["--auto-complete", "true"], &MERGE_AND_KEEP)
     }
 }
 

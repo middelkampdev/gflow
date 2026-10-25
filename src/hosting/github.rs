@@ -58,6 +58,14 @@ impl HostingPlatform for GitHub<'_> {
         self.run_gh(&["pr", "merge", url, "--squash", "--delete-branch"]).map(|_| ())
     }
 
+    fn merge_landing_pr(&self, url: &str) -> Result<()> {
+        self.run_gh(&["pr", "merge", url, "--merge"]).map(|_| ())
+    }
+
+    fn enable_landing_auto_complete(&self, url: &str) -> Result<()> {
+        self.run_gh(&["pr", "merge", url, "--auto", "--merge"]).map(|_| ())
+    }
+
     fn merged_pr(&self, head: &str) -> Result<Option<MergedPr>> {
         // The branch's most recent PR decides: `gh pr list` returns newest first,
         // and the jq filter drops anything not MERGED (open PR → the branch is

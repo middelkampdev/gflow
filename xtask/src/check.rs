@@ -484,12 +484,22 @@ impl<'a> Cycle<'a> {
                 commit = self.parents(&c)?.into_iter().next();
             }
         }
+        // A landing branch gflow merged and deleted within this action: its
+        // commits sit only behind the merge commit's second parent.
+        for p in merges.values() {
+            let mut commit = Some(text(&p["head"]));
+            while let Some(c) = commit.filter(|c| !self.known.contains(c)) {
+                owner.entry(c.clone()).or_insert_with(|| text(&p["source"]));
+                commit = self.parents(&c)?.into_iter().next();
+            }
+        }
         self.add_started(&refs, &mut out);
         // A version branch gflow pushed, merged and deleted within this action.
         for p in &rows {
             let id = p["id"].as_u64().unwrap_or_default();
             let head = text(&p["head"]);
             if p["status"] == "completed"
+                && p["method"] == "squash"
                 && !self.prs.contains_key(&id)
                 && !refs.contains_key(&text(&p["source"]))
                 && !self.known.contains(&head)
