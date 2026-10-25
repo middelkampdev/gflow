@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.0] - 2026-10-25
+
+### Changed
+- **Breaking:** in protected mode, gflow now merges each landing PR itself, at once, with a merge commit, and goes on with the next landing in the same run. One `gflow finish` or `gflow sync` can land every leg. When the platform cannot merge yet (required checks or reviews pending), gflow turns on auto-complete with a merge commit and stops; re-run the command after the PR merged. Teams that relied on a person merging each landing PR need required reviews in their branch protection.
+- Without a terminal, a question now fails with an error that names the question and says to run gflow in a terminal or pass the answer as a flag, instead of `Menu error: Device not configured (os error 6)`.
+
+### Fixed
+- On GitHub, every `gh` call targets the `origin` repository (`--repo HOST/OWNER/REPO`). In a fork with an `upstream` remote, gflow no longer lists or opens PRs in the parent repository.
+
 ## [6.3.0] - 2026-10-20
 
 No change to the `gflow` binary or the plugin skill.
@@ -344,6 +353,7 @@ No change to the `gflow` binary or the plugin skill. This release brings reposit
 - Cross-platform CI/CD with GitHub Actions (macOS x86_64, macOS ARM64, Windows)
 - README with mermaid diagrams documenting the branch model and workflows
 
+[7.0.0]: https://github.com/middelkampdev/gflow/compare/v6.3.0...v7.0.0
 [6.3.0]: https://github.com/middelkampdev/gflow/compare/v6.2.0...v6.3.0
 [6.2.0]: https://github.com/jopmiddelkamp/gflow/compare/v6.1.0...v6.2.0
 [6.1.0]: https://github.com/jopmiddelkamp/gflow/compare/v6.0.0...v6.1.0
