@@ -104,8 +104,12 @@ impl Terminal for SystemTerminal {
 struct TerminalGuard<'a, T: Terminal>(&'a mut T);
 
 impl<'a, T: Terminal> TerminalGuard<'a, T> {
-    fn enter(out: &'a mut T, context: &str) -> Result<Self, String> {
-        out.enable_raw_mode().map_err(|e| format!("{context}: {e}"))?;
+    /// Raw mode fails when there is no terminal (CI, an agent, a pipe without a
+    /// controlling tty), so the error names the question and the way around it.
+    fn enter(out: &'a mut T, question: &str) -> Result<Self, String> {
+        out.enable_raw_mode().map_err(|e| {
+            format!("No terminal to answer '{question}' ({e}). Run gflow in a terminal, or pass every answer as a flag (see 'gflow help <command>').")
+        })?;
         Ok(Self(out))
     }
 }
@@ -152,7 +156,7 @@ fn show_select_on(out: &mut impl Terminal, prompt: &str, items: &[&str]) -> Resu
         execute_terminal!(out, style::Print(prompt), style::Print("\n"))
     })().map_err(|e| format!("Menu error: {e}"))?;
 
-    let guard = TerminalGuard::enter(out, "Menu error")?;
+    let guard = TerminalGuard::enter(out, prompt)?;
     let out = &mut *guard.0;
 
     // Hide cursor during selection; the guard re-shows it on every exit path.
@@ -231,7 +235,7 @@ fn read_raw_line(out: &mut impl Terminal, prompt: &str, transform: impl Fn(&str,
         .and_then(|()| execute_terminal!(out, style::Print(format!("{prompt}: "))))
         .map_err(|e| format!("Input error: {e}"))?;
 
-    let guard = TerminalGuard::enter(out, "Input error")?;
+    let guard = TerminalGuard::enter(out, prompt)?;
     let out = &mut *guard.0;
 
     let result = loop {
@@ -598,12 +602,15 @@ mod tests {
     }
 
     #[test]
-    fn raw_mode_failures_keep_input_unread_and_name_the_operation() {
+    fn raw_mode_failures_keep_input_unread_and_name_the_question_and_the_way_out() {
         let mut terminal = ScriptedTerminal::new([]);
         terminal.fail_enter = true;
-        assert_eq!(show_select_on(&mut terminal, "Pick", &["only"]), Err("Menu error: raw mode unavailable".into()));
-        assert_eq!(prompt_line_on(&mut terminal, "Line"), Err("Input error: raw mode unavailable".into()));
-        assert_eq!(prompt_name_on(&mut terminal, "Name"), Err("Input error: raw mode unavailable".into()));
+        let no_terminal = |question: &str| {
+            format!("No terminal to answer '{question}' (raw mode unavailable). Run gflow in a terminal, or pass every answer as a flag (see 'gflow help <command>').")
+        };
+        assert_eq!(show_select_on(&mut terminal, "Pick", &["only"]), Err(no_terminal("Pick")));
+        assert_eq!(prompt_line_on(&mut terminal, "Line"), Err(no_terminal("Line")));
+        assert_eq!(prompt_name_on(&mut terminal, "Name"), Err(no_terminal("Name")));
         terminal.assert_restored();
     }
 

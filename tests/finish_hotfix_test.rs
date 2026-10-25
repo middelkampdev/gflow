@@ -425,6 +425,8 @@ fn protected_hotfix_opens_main_pr_and_stops() {
         "merged_pr_to:landing/hotfix-1.1.1-into-main:main",
         "merged_pr_to:hotfix/1.1.1:main",
         "create_or_get_pr:landing/hotfix-1.1.1-into-main:main:chore: merge hotfix 1.1.1 into main:empty-body",
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
         "copy_text:chore: merge hotfix 1.1.1 into main\nhttps://github.com/org/repo/pull/1",
         "open_url:https://github.com/org/repo/pull/1",
     ]);
@@ -486,6 +488,8 @@ fn protected_hotfix_tags_merge_commit_then_opens_develop_pr() {
         "merged_pr_to:landing/hotfix-1.1.1-into-develop:develop",
         "merged_pr_to:hotfix/1.1.1:develop",
         "create_or_get_pr:landing/hotfix-1.1.1-into-develop:develop:chore: merge hotfix 1.1.1 into develop:empty-body",
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
         "copy_text:chore: merge hotfix 1.1.1 into develop\nhttps://github.com/org/repo/pull/1",
         "open_url:https://github.com/org/repo/pull/1",
     ]);
@@ -547,6 +551,8 @@ fn protected_hotfix_opens_one_release_pr_per_run() {
         "merged_pr_to:landing/hotfix-1.1.1-into-release-1.2.0:release/1.2.0",
         "merged_pr_to:hotfix/1.1.1:release/1.2.0",
         "create_or_get_pr:landing/hotfix-1.1.1-into-release-1.2.0:release/1.2.0:chore: merge hotfix 1.1.1 into release/1.2.0:empty-body",
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
         "copy_text:chore: merge hotfix 1.1.1 into release/1.2.0\nhttps://github.com/org/repo/pull/1",
         "open_url:https://github.com/org/repo/pull/1",
     ]);
@@ -614,6 +620,8 @@ fn protected_hotfix_next_run_opens_pr_for_the_remaining_release() {
         "merged_pr_to:landing/hotfix-1.1.1-into-release-1.3.0:release/1.3.0",
         "merged_pr_to:hotfix/1.1.1:release/1.3.0",
         "create_or_get_pr:landing/hotfix-1.1.1-into-release-1.3.0:release/1.3.0:chore: merge hotfix 1.1.1 into release/1.3.0:empty-body",
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
         "copy_text:chore: merge hotfix 1.1.1 into release/1.3.0\nhttps://github.com/org/repo/pull/1",
         "open_url:https://github.com/org/repo/pull/1",
     ]);
@@ -744,6 +752,8 @@ fn protected_hotfix_reopens_the_develop_leg_when_the_branch_moved() {
         "merged_pr_to:landing/hotfix-1.3.1-into-develop:develop",
         "merged_pr_to:hotfix/1.3.1:develop",
         "create_or_get_pr:landing/hotfix-1.3.1-into-develop:develop:chore: merge hotfix 1.3.1 into develop:empty-body",
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
         "copy_text:chore: merge hotfix 1.3.1 into develop\nhttps://github.com/org/repo/pull/1",
         "open_url:https://github.com/org/repo/pull/1",
     ]);
@@ -897,6 +907,8 @@ fn protected_hotfix_all_legs_use_landing_branches() {
         "merged_pr_to:landing/hotfix-1.1.1-into-release-1.2.0:release/1.2.0",
         "merged_pr_to:hotfix/1.1.1:release/1.2.0",
         "create_or_get_pr:landing/hotfix-1.1.1-into-release-1.2.0:release/1.2.0:chore: merge hotfix 1.1.1 into release/1.2.0:empty-body",
+        "merge_landing_pr:https://github.com/org/repo/pull/1",
+        "enable_landing_auto_complete:https://github.com/org/repo/pull/1",
         "copy_text:chore: merge hotfix 1.1.1 into release/1.2.0\nhttps://github.com/org/repo/pull/1",
         "open_url:https://github.com/org/repo/pull/1",
     ]);
@@ -1348,3 +1360,31 @@ fn protected_hotfix_lands_on_open_releases_before_develop() {
     assert_eq!(opened, ["create_or_get_pr:landing/hotfix-1.1.1-into-release-1.2.0:release/1.2.0:chore: merge hotfix 1.1.1 into release/1.2.0:empty-body"]);
 }
 
+
+#[test]
+fn protected_hotfix_merges_each_landing_at_once_and_finishes_in_one_run() {
+    let mut git = MockGit::new();
+    git.current_branch = "hotfix/1.1.1".to_string();
+    git.branch_shas.insert("hotfix/1.1.1".to_string(), "hfsha".to_string());
+    git.existing_local_branches.insert("hotfix/1.1.1".to_string());
+    git.existing_remote_branches.insert("hotfix/1.1.1".to_string());
+    git.pushed_branches.insert("hotfix/1.1.1".to_string());
+    git.existing_tags.insert("v1.1.1".to_string());
+    git.tag_commits.insert("v1.1.1".to_string(), "hfsha".to_string());
+    git.existing_remote_tags.insert("v1.1.1".to_string());
+    let mut hosting = MockHosting::new();
+    hosting.landing_merge_error = None;
+    for (landing, target, merge) in [("landing/hotfix-1.1.1-into-main", "main", "mc1"), ("landing/hotfix-1.1.1-into-develop", "develop", "mc2")] {
+        git.ancestors.insert((landing.to_string(), format!("origin/{target}")));
+        git.ancestors.insert((merge.to_string(), format!("origin/{target}")));
+        git.parent_counts.insert(merge.to_string(), 2);
+        hosting.landed_on_landing_merge.push(((landing.to_string(), target.to_string()), landed("hfsha", merge)));
+    }
+
+    let event = finish_hotfix(&git, &hosting, &protected_cfg(false), 1, 1, 1, "main", None, false).unwrap();
+
+    assert_eq!(event, hotfix_finished(1, 1, 1));
+    let calls = hosting.calls();
+    assert_eq!(calls.iter().filter(|c| c.starts_with("merge_landing_pr:")).count(), 2, "calls: {calls:?}");
+    assert!(!calls.iter().any(|c| c.starts_with("copy_text:")), "calls: {calls:?}");
+}

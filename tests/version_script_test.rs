@@ -5,8 +5,15 @@ use std::fs;
 #[cfg(unix)]
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use gflow::version_script::{ScriptCli, VersionScript};
+
+/// Linux refuses to run a file that any process holds open for writing
+/// (ETXTBSY, "Text file busy"). Tests run as threads of one process, so a
+/// script one test is still writing leaks into a child another test spawns.
+/// Every test that writes or spawns a script takes this lock.
+static SCRIPTS: Mutex<()> = Mutex::new(());
 
 #[cfg(unix)]
 fn write_script(path: &Path, contents: &str) {
@@ -19,6 +26,7 @@ fn write_script(path: &Path, contents: &str) {
 #[cfg(unix)]
 #[test]
 fn version_script_receives_one_version_argument_inside_the_repository() {
+    let _scripts = SCRIPTS.lock().unwrap_or_else(|e| e.into_inner());
     let root = common::tmp_dir("gflow-version-execution");
     let path = root.join("set-version.sh");
     write_script(
@@ -38,6 +46,7 @@ fn version_script_receives_one_version_argument_inside_the_repository() {
 #[cfg(unix)]
 #[test]
 fn a_failed_version_script_reports_its_stderr_and_exit_code() {
+    let _scripts = SCRIPTS.lock().unwrap_or_else(|e| e.into_inner());
     let root = common::tmp_dir("gflow-version-failure");
     let path = root.join("set-version.sh");
     write_script(
@@ -62,6 +71,7 @@ fn a_script_path_without_a_filename_still_has_a_display_name() {
 
 #[test]
 fn version_script_names_the_chmod_remedy_when_it_cannot_be_spawned() {
+    let _scripts = SCRIPTS.lock().unwrap_or_else(|e| e.into_inner());
     let root = common::tmp_dir("gflow-version-missing");
     let path = root.join("missing-set-version.sh");
     let script = ScriptCli::new(path.clone(), root.to_path_buf());

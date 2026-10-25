@@ -37,6 +37,8 @@ cargo install --path .
 
 gflow auto-detects the hosting provider from the `origin` remote URL: `dev.azure.com` and `*.visualstudio.com` remotes use Azure DevOps (org/project/repo are parsed from the URL), everything else uses GitHub. Only the CLI of the detected provider needs to be installed.
 
+On GitHub, gflow passes the `origin` repository to every `gh` call (`--repo HOST/OWNER/REPO`). In a fork with an `upstream` remote, PRs therefore stay in your fork's repository instead of the parent.
+
 To override detection (e.g. a GitHub Enterprise domain), set:
 
 ```bash
@@ -228,7 +230,8 @@ older than the syntax it documents.
 
 ## Non-Interactive CLI (for AI tools & scripts)
 
-All commands can be invoked directly via subcommands, bypassing the interactive menu:
+All commands can be invoked directly via subcommands, bypassing the interactive menu.
+When gflow needs an answer and there is no terminal, it stops with an error that names the question (`No terminal to answer 'Release type' ...`); pass the flag that answers it (here `--major` or `--minor`).
 
 ### Start commands
 
@@ -699,10 +702,10 @@ One consequence to plan for: under `patch` every tag is a clean `vX.Y.Z` — the
 
 Use `mode=protected` when `main`/`develop` require pull requests (branch protection, required reviews). In this mode:
 
-- **gflow never merges a landing PR.** Every landing that would otherwise be a direct push instead opens (or reuses) a PR and prints its URL. The one exception is gflow's own version PRs; see [`version/*` branches](#version-branches).
+- **gflow merges each landing PR itself.** Every landing that would otherwise be a direct push instead opens (or reuses) a PR, and gflow merges it at once with a merge commit, then goes on to the next landing in the same run. When the platform will not merge yet (required checks or reviews pending), gflow turns on auto-complete with a merge commit, prints the PR, and stops.
 - **Every landing PR's head is a throwaway `landing/*` branch** cut from the source — `landing/release-1.2.0-into-main`, `landing/hotfix-1.1.1-into-release-1.2.0`, and so on. The release/hotfix branch itself is never a PR head, so nothing (a conflict resolution, the platform's auto-delete-head-branches setting) can ever touch it. gflow creates, refreshes, and deletes these branches itself; a landing that predates newer source commits is re-opened with a refreshed landing branch, so no commit can silently miss a target.
-- `finish`, `bump`, and `sync` **exit 0** with the PR pending — nothing is left half-done, there's just a human step in between. Re-run the same command after the PR is merged; it continues from there.
-- Landings happen **one PR per run**, in order: `main`, then — for hotfixes — each open `release/*` branch, then `develop`. Only the **last** landing deletes the source branch (and every `landing/*` branch, orphans included) — unless `keep-release-branches=true`, or its tip provably landed nowhere, in which case gflow keeps the branch and tells you how to remove it yourself.
+- `finish`, `bump`, and `sync` **exit 0** with the PR pending — nothing is left half-done. Re-run the same command after the PR is merged; it continues from there.
+- Landings happen **one PR at a time**, in order: `main`, then — for hotfixes — each open `release/*` branch, then `develop`. Only the **last** landing deletes the source branch (and every `landing/*` branch, orphans included) — unless `keep-release-branches=true`, or its tip provably landed nowhere, in which case gflow keeps the branch and tells you how to remove it yourself.
 - Progress is never stored on disk for a protected finish — there's nothing to resume, because it never merged locally. Each run re-derives what's landed from the hosting platform's PR state and from tags.
 - **Landing PRs are born mergeable.** Before opening (or refreshing) a landing PR, gflow merges the target into the landing branch itself. A new landing branch always gets that merge, also when the target did not move since the cut, so every landing looks the same. A conflict — e.g. on the version file, see [Version-file merge-conflict papercut](#version-file-merge-conflict-papercut) — therefore surfaces immediately in your terminal, mid-run, and gflow announces that **your current worktree is now on the landing branch**, mid-merge. Resolve the conflicts right there, `git add . && git commit --no-edit`, and re-run — the re-run switches the worktree back to the source branch itself, pushes the resolution, and opens the PR conflict-free (`git merge --abort && git switch <source>` backs out instead). A PR that turns conflicted *later* because the target moved is healed the same way — just re-run. The release/hotfix branch is never touched by a resolution, and the landing branch is never rebased.
 - **Upgrading with a landing in flight?** An open landing PR whose head is the release/hotfix branch itself (opened by an older gflow) is a hard error naming it: merge it and re-run, or close/abandon it and re-run — gflow then reopens it from a landing branch. Already-merged old-style legs are recognized as landed. Landing branches used to be named `finish/*`; gflow no longer recognizes those, so land a release or hotfix that is mid-landing with the gflow version that started it, then delete any leftover `finish/*` branches (`git push origin --delete <branch>`).
@@ -715,39 +718,31 @@ Use `mode=protected` when `main`/`develop` require pull requests (branch protect
 
   Those commits still reach `develop` through the remaining landing, so nothing is lost — they just are not in this release.
 
-A `gflow finish` loop on a release branch looks like this:
+A `gflow finish` on a release branch whose platform merges at once:
 
 ```
 $ gflow finish
 Tagging the tested tip of release/2.6.0: v2.6.0
-Copied PR title + URL to clipboard.
+✔ Merged https://github.com/org/repo/pull/42 with a merge commit.
+✔ Merged https://github.com/org/repo/pull/43 with a merge commit.
+Cleaning up release branch...
+✔ Release 2.6.0 complete.
+```
 
-chore: merge release 2.6.0 into main
-https://github.com/org/repo/pull/42
+When required checks are still running, the run stops at that PR instead:
 
-Waiting for a human to merge this PR.
-Re-run 'gflow finish' to continue after the merge.
-
-Conflicts later (main moved)? Just re-run — gflow merges `main` into `landing/release-2.6.0-into-main` in this worktree and stops there for you to resolve locally if needed.
-
-  ... a human merges pull/42 on GitHub ...
-
+```
 $ gflow finish
 Copied PR title + URL to clipboard.
 
 chore: merge release 2.6.0 into develop
 https://github.com/org/repo/pull/43
 
-Waiting for a human to merge this PR.
+Waiting for this PR to merge.
 Re-run 'gflow finish' to continue after the merge.
 
 Conflicts later (develop moved)? Just re-run — gflow merges `develop` into `landing/release-2.6.0-into-develop` in this worktree and stops there for you to resolve locally if needed.
-
-  ... a human merges pull/43 ...
-
-$ gflow finish
-Cleaning up release branch...
-✔ Release 2.6.0 complete.
+Auto-complete is on: the platform merges this PR once its checks and reviews pass.
 ```
 
 The title + URL pair is printed bare (bold title in a terminal, no prefixes) and copied to your clipboard, so pasting the PR into Slack is select-copy-paste — or just paste. On a machine without a clipboard tool the copy is silently skipped; the block is always printed. The same block is printed for work-branch and version PRs. Styling degrades automatically: bold is dropped when output is piped, when [`NO_COLOR`](https://no-color.org/) is set, or when `TERM=dumb`.
