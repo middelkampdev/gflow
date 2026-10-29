@@ -302,9 +302,9 @@ pub fn set_key(path: &Path, key: &str, value: Option<&str>) -> Result<(), String
 }
 
 /// The 4.0.x git config keys, paired with the file key that replaces them.
-/// `gflow.branch.main` and `gflow.hosting.provider` are absent on purpose:
-/// they are detection caches gflow writes back itself, not settings a user
-/// chose, so they stay in git config where their per-clone lifetime belongs.
+/// `gflow.branch.main` is absent on purpose: it is a detection cache gflow
+/// writes back itself, not a setting a user chose, so it stays in git config
+/// where its per-clone lifetime belongs.
 type MigratedKey = (&'static str, &'static str, fn(&Settings) -> bool);
 const MIGRATED_SECTION: &str = "gflow.worktree";
 const MIGRATED_KEYS: &[MigratedKey] = &[

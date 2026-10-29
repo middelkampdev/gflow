@@ -127,17 +127,16 @@ fn a_second_run_is_a_no_op() {
 }
 
 #[test]
-fn detection_caches_are_not_settings_and_stay_in_git_config() {
+fn the_main_branch_cache_is_not_a_setting_and_stays_in_git_config() {
     let home = tmp_dir("gflow-migrate-home");
     let repo = tmp_dir("gflow-migrate-repo");
     let mut git = MockGit::new();
     git.config.insert("gflow.branch.main".into(), "master".into());
-    git.config.insert("gflow.hosting.provider".into(), "github".into());
 
     repo_config::migrate_git_config(&git, Some(&home), Some(&repo)).unwrap();
 
     let unset: Vec<_> = git.calls().into_iter().filter(|c| c.starts_with("unset_config")).collect();
-    assert!(unset.is_empty(), "caches must be left alone, got: {unset:?}");
+    assert!(unset.is_empty(), "the cache must be left alone, got: {unset:?}");
 }
 
 #[test]

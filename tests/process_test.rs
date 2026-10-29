@@ -9,7 +9,6 @@ use std::process::{Command, Output};
 
 use gflow::editor::{CommandEditor, Editor};
 use gflow::git::{CommandRunner, SystemRunner};
-use gflow::hosting::devops::AzureDevOps;
 use gflow::hosting::github::GitHub;
 use gflow::hosting::{CliRunner, HostingPlatform, PrBody, SystemCli};
 
@@ -76,9 +75,6 @@ case "$*" in
     'rev-parse --git-dir') printf '%s/repo/.git\n' "$GFLOW_FIXTURE" ;;
     'worktree list --porcelain') printf 'worktree %s/main\n' "$GFLOW_FIXTURE" ;;
     'config --get gflow.branch.main') printf '%s\n' "${GFLOW_MAINLINE:-main}" ;;
-    'config --get gflow.hosting.provider')
-        if [ -n "$GFLOW_PROVIDER" ]; then printf '%s\n' "$GFLOW_PROVIDER"; else exit 1; fi
-        ;;
     'remote get-url origin') printf '%s\n' "${GFLOW_REMOTE:-https://github.com/example/fixture.git}" ;;
     'tag --list') ;;
     'rev-list --first-parent HEAD') printf 'c1\nc0\n' ;;
@@ -194,25 +190,20 @@ fn startup_reads_the_worktree_root_once() {
 
 #[test]
 fn abort_runs_without_hosting_cli_authentication_or_fetch() {
-    for remote in [
-        "https://github.com/example/fixture.git",
-        "https://dev.azure.com/example/project/_git/fixture",
-    ] {
-        let fixture = ProcessFixture::new();
-        fixture.git();
-        fixture.initialized();
-        let output = fixture
-            .command(env!("CARGO_BIN_EXE_gflow"))
-            .args(["finish", "--abort"])
-            .env("GFLOW_REMOTE", remote)
-            .output()
-            .unwrap();
-        assert_success(&output);
-        assert!(stdout(&output).contains("No in-progress finish"));
-        let calls = fs::read_to_string(fixture.root.join("git-calls")).unwrap();
-        assert!(calls.contains("remote get-url origin"));
-        assert!(!calls.lines().any(|line| line == "fetch"));
-    }
+    let fixture = ProcessFixture::new();
+    fixture.git();
+    fixture.initialized();
+    let output = fixture
+        .command(env!("CARGO_BIN_EXE_gflow"))
+        .args(["finish", "--abort"])
+        .env("GFLOW_REMOTE", "https://github.com/example/fixture.git")
+        .output()
+        .unwrap();
+    assert_success(&output);
+    assert!(stdout(&output).contains("No in-progress finish"));
+    let calls = fs::read_to_string(fixture.root.join("git-calls")).unwrap();
+    assert!(calls.contains("remote get-url origin"));
+    assert!(!calls.lines().any(|line| line == "fetch"));
 }
 
 #[test]
@@ -285,23 +276,6 @@ fn a_wrong_platform_version_script_stops_before_hosting_detection() {
     assert!(stderr(&output).contains("set-version.sh"));
     let calls = fs::read_to_string(fixture.root.join("git-calls")).unwrap();
     assert!(!calls.contains("remote get-url"));
-}
-
-#[test]
-fn an_invalid_hosting_provider_stops_before_lifecycle_work() {
-    let fixture = ProcessFixture::new();
-    fixture.git();
-    fixture.initialized();
-    let output = fixture
-        .command(env!("CARGO_BIN_EXE_gflow"))
-        .args(["finish", "--abort"])
-        .env("GFLOW_PROVIDER", "invalid")
-        .output()
-        .unwrap();
-    assert!(!output.status.success());
-    assert!(stderr(&output).contains("Invalid gflow.hosting.provider value"));
-    let calls = fs::read_to_string(fixture.root.join("git-calls")).unwrap();
-    assert!(!calls.contains("rev-parse --git-dir"));
 }
 
 #[test]
@@ -419,16 +393,11 @@ fn clipboard_requires_the_tools_exit_status_to_confirm_success() {
 }
 
 #[test]
-fn providers_use_the_repository_native_template_when_requested() {
+fn github_uses_the_repository_native_template_when_requested() {
     let fixture = ProcessFixture::new();
-    for path in [
-        ".github/PULL_REQUEST_TEMPLATE.md",
-        ".azuredevops/pull_request_template.md",
-    ] {
-        let path = fixture.root.join("repo").join(path);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, "Summary\n\nValidation\n").unwrap();
-    }
+    let path = fixture.root.join("repo/.github/PULL_REQUEST_TEMPLATE.md");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, "Summary\n\nValidation\n").unwrap();
     let output = fixture
         .command(std::env::current_exe().unwrap())
         .args([
@@ -507,18 +476,6 @@ fn process_adapter_child() {
             .unwrap();
         assert_eq!(url, "https://github.com/o/r/pull/1");
         assert!(runner.calls()[1].ends_with("--body-file .github/PULL_REQUEST_TEMPLATE.md"));
-        let runner = common::MockCliRunner::scripted(&[Ok("extension"), Ok(""), Ok("42")]);
-        let hosting = AzureDevOps::new("org".into(), "project".into(), "repo".into(), &runner);
-        let url = hosting
-            .create_or_get_pr("feature/x", "develop", "feat: x", PrBody::NativeDefault)
-            .unwrap();
-        assert_eq!(
-            url,
-            "https://dev.azure.com/org/project/_git/repo/pullrequest/42"
-        );
-        assert!(
-            runner.calls()[2].contains("--description Summary  Validation  --query pullRequestId")
-        );
         return;
     }
     if scenario == "adapters" {

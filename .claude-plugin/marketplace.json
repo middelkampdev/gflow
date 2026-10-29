@@ -7,7 +7,7 @@
     {
       "name": "gflow",
       "source": "./",
-      "description": "Customized gitflow workflow CLI: branch start/finish, releases, PR automation for GitHub and Azure DevOps."
+      "description": "Customized gitflow workflow CLI: branch start/finish, releases, PR automation for GitHub."
     }
   ]
 }

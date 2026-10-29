@@ -106,7 +106,7 @@ SOLID ceremony is justified when the problem demands it. It's over-engineering w
 
 - **Yes, it crosses the port boundary** (subprocess, network, terminal, clock) → add the trait
 - **Yes, a flow cannot be tested without it** → add the trait
-- **Yes, 2+ real impls exist** (`GitHub` / `AzureDevOps`) → add the trait
+- **Yes, 2+ real impls exist** → add the trait
 - **No, maybe someday** → don't add it (KISS wins over speculative SOLID)
 
 ## KISS Applied to Architecture

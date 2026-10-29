@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - With the worktree flow on, only the interactive menu (`gflow` with no subcommand) opens the new worktree in the editor. Subcommands such as `gflow start feature --name x` create the worktree and print its path, but open no editor.
 
+### Removed
+- **Breaking:** Azure DevOps support. gflow now works with GitHub only, through `gh`; `az` is no longer used. A `dev.azure.com` or `*.visualstudio.com` origin is treated like any other remote and goes to `gh`, which fails.
+- **Breaking:** the `gflow.hosting.provider` git config key. gflow ignores it; remove it with `git config --unset gflow.hosting.provider`.
+
 ## [7.0.0] - 2026-10-25
 
 ### Changed

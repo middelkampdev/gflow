@@ -36,7 +36,7 @@ Code that looks similar today but represents different business concepts. They w
 
 **Heuristic:** These change for **different reasons** or at **different times**.
 
-**Example (real):** `hosting/github.rs` and `hosting/devops.rs` have the same *shape* — check for a PR, create one, report a merge. They share almost no knowledge: `gh` takes `--body-file` while `az` needs the file read; ADO PR URLs must be synthesized. The one genuinely shared rule, `resolve_body_file`, IS extracted; the rest stays apart on purpose.
+**Example (real, until 8.0.0):** `hosting/github.rs` and the removed `hosting/devops.rs` had the same *shape* — check for a PR, create one, report a merge. They shared almost no knowledge: `gh` takes `--body-file` while `az` needed the file read; ADO PR URLs had to be synthesized. The one genuinely shared rule, `resolve_body_file`, was extracted; the rest stayed apart on purpose.
 
 ### 3. Structural Similarity (Pattern — Document)
 
