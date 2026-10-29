@@ -223,7 +223,7 @@ fn an_unusable_worktree_base_directory_is_a_hard_error() {
         base_path: Some(blocker.join("nested").to_string_lossy().to_string()),
     };
 
-    let env = gflow::worktree::WorktreeEnv { config: &config, editor: &MockEditor::new(), setup: &common::MockWorktreeSetup::new(), commands: None };
+    let env = gflow::worktree::WorktreeEnv { config: &config, editor: &MockEditor::new(), setup: &common::MockWorktreeSetup::new(), commands: None, open_editor: true };
     let err = open_worktree(&git, &gflow::worktree::WorktreeContext { env: &env, prompter: &MockPrompter::new() }, "feature/x").unwrap_err();
 
     std::fs::remove_file(&blocker).ok();
@@ -248,7 +248,7 @@ fn worktree_git_failures_stop_before_setup_or_editor_launch() {
         let editor = MockEditor::new();
         let setup = common::MockWorktreeSetup::new();
         let config = WorktreeConfig::from_settings(&settings("worktree=true\n"));
-        let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
+        let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: true };
         let prompter = MockPrompter::aborting();
 
         let err = open_worktree(&git, &WorktreeContext { env: &env, prompter: &prompter },
@@ -270,7 +270,7 @@ fn a_repository_root_without_a_name_cannot_create_a_worktree() {
     let config = WorktreeConfig::from_settings(&settings("worktree=true\n"));
     let editor = MockEditor::new();
     let setup = common::MockWorktreeSetup::new();
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: true };
     let prompter = MockPrompter::aborting();
 
     let err = open_worktree(&git, &WorktreeContext { env: &env, prompter: &prompter },
@@ -704,7 +704,7 @@ fn open_worktree_runs_setup_commands_after_creation_and_before_the_editor() {
     let config = test_worktree_config("code");
     let (editor, setup, prompter) = (MockEditor::new(), MockWorktreeSetup::new(), MockPrompter::new());
     let cmds = setup_cmds();
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: Some(&cmds) };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: Some(&cmds), open_editor: true };
 
     open_worktree(&git, &WorktreeContext { env: &env, prompter: &prompter }, "feature/x").unwrap();
 
@@ -725,7 +725,7 @@ fn open_worktree_continues_after_a_failing_command() {
     let (editor, mut setup, prompter) = (MockEditor::new(), MockWorktreeSetup::new(), MockPrompter::new());
     setup.fail.insert("fvm use".to_string());
     let cmds = setup_cmds();
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: Some(&cmds) };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: Some(&cmds), open_editor: true };
 
     open_worktree(&git, &WorktreeContext { env: &env, prompter: &prompter }, "feature/x").unwrap();
 
@@ -738,7 +738,7 @@ fn open_worktree_runs_nothing_without_a_setup_file() {
     let git = MockGit::new();
     let config = test_worktree_config("code");
     let (editor, setup, prompter) = (MockEditor::new(), MockWorktreeSetup::new(), MockPrompter::new());
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: true };
 
     open_worktree(&git, &WorktreeContext { env: &env, prompter: &prompter }, "feature/y").unwrap();
 

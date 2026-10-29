@@ -88,6 +88,8 @@ pub struct WorktreeEnv<'a> {
     pub editor: &'a dyn Editor,
     pub setup: &'a dyn WorktreeSetup,
     pub commands: Option<&'a SetupCommands>,
+    /// False for subcommand runs: scripted callers get the worktree, not an editor window.
+    pub open_editor: bool,
 }
 
 /// Per-run handle passed into the start flows when the worktree flow is active.
@@ -158,7 +160,7 @@ pub fn open_worktree(git: &dyn Git, ctx: &WorktreeContext<'_>, branch: &str) -> 
         run_setup(ctx.env.setup, &repo_root, &path, cmds);
     }
 
-    if !editor_disabled(&config.editor) {
+    if ctx.env.open_editor && !editor_disabled(&config.editor) {
         let editor_cmd = config.editor.trim();
         println!("Opening in editor: {editor_cmd}");
         if let Err(e) = editor.open(&path) {
