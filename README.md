@@ -412,7 +412,7 @@ plain `key=value` files you can also edit by hand — see
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `worktree` | `false` | Turn the worktree flow on |
-| `editor` | `code` | Command to open the worktree (`<editor> <path>`). Use `none` to skip opening |
+| `editor` | `code` | Command to open the worktree (`<editor> <path>`), in the interactive menu only. Use `none` to skip opening |
 | `path` | _(unset)_ | Directory to place worktree folders in (`~` is expanded). Defaults to the repo's parent directory |
 
 > Upgrading from 4.0.x: the old `gflow.worktree.*` git config keys move into these files
@@ -438,7 +438,7 @@ When enabled, `gflow start feature/fix/chore/docs/refactor` (and `release-fix` /
 
 1. Create and push the branch **without** switching your current checkout.
 2. Add a git worktree for it.
-3. Open that folder in your editor (unless `editor = none`). An editor that isn't installed is a warning, not a failure — the worktree is still ready.
+3. Open that folder in your editor (unless `editor = none`). Only the interactive menu (`gflow` with no subcommand) opens the editor; subcommands such as `gflow start feature --name x` only create the worktree. An editor that isn't installed is a warning, not a failure — the worktree is still ready.
 
 Pass `--no-worktree` to skip the flow for a single command.
 

@@ -629,7 +629,7 @@ fn start_work_branch_worktree_active_forces_no_checkout_and_opens() {
     let editor = MockEditor::new();
     let setup = MockWorktreeSetup::new();
     let prompter = MockPrompter::new();
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: true };
     let ctx = WorktreeContext { env: &env, prompter: &prompter };
 
     // Pass no_checkout=false: worktree mode must still force the no-checkout path.
@@ -655,7 +655,7 @@ fn start_work_branch_worktree_editor_failure_is_not_fatal() {
     editor.fail = true;
     let setup = MockWorktreeSetup::new();
     let prompter = MockPrompter::new();
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: true };
     let ctx = WorktreeContext { env: &env, prompter: &prompter };
 
     let result = start_work_branch(&git, "feature", "login-page", "develop", false, Some(ctx));
@@ -670,12 +670,28 @@ fn start_work_branch_worktree_editor_none_skips_open() {
     let editor = MockEditor::new();
     let setup = MockWorktreeSetup::new();
     let prompter = MockPrompter::new();
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: true };
     let ctx = WorktreeContext { env: &env, prompter: &prompter };
 
     start_work_branch(&git, "feature", "login-page", "develop", false, Some(ctx)).unwrap();
 
     assert!(editor.calls().is_empty(), "editor 'none' should not open anything");
+    assert!(git.calls().iter().any(|c| c.starts_with("add_worktree:")), "worktree should still be created");
+}
+
+#[test]
+fn start_work_branch_worktree_without_open_editor_skips_open() {
+    let git = MockGit::new();
+    let config = test_worktree_config("code");
+    let editor = MockEditor::new();
+    let setup = MockWorktreeSetup::new();
+    let prompter = MockPrompter::new();
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: false };
+    let ctx = WorktreeContext { env: &env, prompter: &prompter };
+
+    start_work_branch(&git, "feature", "login-page", "develop", false, Some(ctx)).unwrap();
+
+    assert!(editor.calls().is_empty(), "a subcommand run must not open the editor");
     assert!(git.calls().iter().any(|c| c.starts_with("add_worktree:")), "worktree should still be created");
 }
 
@@ -688,7 +704,7 @@ fn start_release_fix_worktree_active_discovers_and_opens() {
     let editor = MockEditor::new();
     let setup = MockWorktreeSetup::new();
     let prompter = MockPrompter::new();
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: true };
     let ctx = WorktreeContext { env: &env, prompter: &prompter };
 
     // worktree mode forces the no-checkout discovery path even from develop.
@@ -1062,7 +1078,7 @@ fn start_hotfix_fix_worktree_active_discovers_and_opens() {
     let editor = MockEditor::new();
     let config = test_worktree_config("code");
 
-    start_hotfix_fix(&git, &MockHosting::new(), &RepoConfig::default(), "npe", false, Some(WorktreeContext { env: &WorktreeEnv { config: &config, editor: &editor, setup: &MockWorktreeSetup::new(), commands: None }, prompter: &MockPrompter::new() }), "main", None).unwrap();
+    start_hotfix_fix(&git, &MockHosting::new(), &RepoConfig::default(), "npe", false, Some(WorktreeContext { env: &WorktreeEnv { config: &config, editor: &editor, setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, prompter: &MockPrompter::new() }), "main", None).unwrap();
 
     let calls = git.calls();
     assert!(calls.contains(&"create_branch_no_checkout:hotfix-fix/2.5.1/npe:hotfix/2.5.1".to_string()),
@@ -1087,7 +1103,7 @@ fn start_hotfix_fix_worktree_mode_opens_a_worktree_for_the_new_hotfix_branch_too
     let editor = MockEditor::new();
     let setup = MockWorktreeSetup::new();
     let prompter = MockPrompter::new();
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: true };
     let ctx = WorktreeContext { env: &env, prompter: &prompter };
 
     start_hotfix_fix(&git, &MockHosting::new(), &RepoConfig::default(), "urgent-crash", false, Some(ctx), "main", None).unwrap();
@@ -1124,7 +1140,7 @@ fn start_hotfix_fix_worktree_mode_points_at_the_worktree_that_already_holds_the_
     let editor = MockEditor::new();
     let setup = MockWorktreeSetup::new();
     let prompter = MockPrompter::new();
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: true };
     let ctx = WorktreeContext { env: &env, prompter: &prompter };
 
     start_hotfix_fix(&git, &MockHosting::new(), &RepoConfig::default(), "npe", false, Some(ctx), "main", None).unwrap();
@@ -1257,7 +1273,7 @@ fn start_release_worktree_mode_creates_here_then_opens_a_worktree() {
     let editor = MockEditor::new();
     let setup = MockWorktreeSetup::new();
     let prompter = MockPrompter::new();
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: true };
     let ctx = WorktreeContext { env: &env, prompter: &prompter };
 
     let event = start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &RepoConfig::default(), Some(ReleaseType::Minor), "main", Some(ctx)).unwrap();
@@ -1291,7 +1307,7 @@ fn start_release_worktree_mode_opens_a_worktree_for_an_existing_release() {
     let editor = MockEditor::new();
     let setup = MockWorktreeSetup::new();
     let prompter = MockPrompter::new();
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: true };
     let ctx = WorktreeContext { env: &env, prompter: &prompter };
 
     let event = start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &RepoConfig::default(), None, "main", Some(ctx)).unwrap();
@@ -1312,7 +1328,7 @@ fn start_release_worktree_mode_points_at_the_worktree_that_already_holds_the_rel
     let editor = MockEditor::new();
     let setup = MockWorktreeSetup::new();
     let prompter = MockPrompter::new();
-    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None };
+    let env = WorktreeEnv { config: &config, editor: &editor, setup: &setup, commands: None, open_editor: true };
     let ctx = WorktreeContext { env: &env, prompter: &prompter };
 
     start_release(&git, &MockPrompter::new(), &MockHosting::new(), None, &RepoConfig::default(), None, "main", Some(ctx)).unwrap();
@@ -1806,6 +1822,7 @@ fn start_worktree_errors_stop_before_opening_the_editor_or_creating_a_fix() {
             editor: &editor,
             setup: &setup,
             commands: None,
+            open_editor: true,
         };
         let ctx = Some(WorktreeContext {
             env: &env,

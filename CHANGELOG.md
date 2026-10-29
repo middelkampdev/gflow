@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- With the worktree flow on, only the interactive menu (`gflow` with no subcommand) opens the new worktree in the editor. Subcommands such as `gflow start feature --name x` create the worktree and print its path, but open no editor.
+
 ## [7.0.0] - 2026-10-25
 
 ### Changed

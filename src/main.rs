@@ -110,6 +110,7 @@ fn run(command: Option<Commands>) -> Result<(), String> {
         editor: &editor,
         setup: &ShellSetup,
         commands: setup_commands.as_ref(),
+        open_editor: command.is_none(),
     };
     let prompter = MenuPrompter;
     let hook_env = HookEnv {
