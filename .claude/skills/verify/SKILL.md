@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Drive the real gflow binary end-to-end against a fake Azure DevOps remote (fake ssh + fake az) to verify a change at the terminal.
+description: Drive the real gflow binary end-to-end against a fake GitHub remote (fake ssh + fake gh) to verify a change at the terminal.
 ---
 
 # Verifying gflow at its surface
@@ -10,16 +10,17 @@ that comes first on `PATH`. Never point it at a real repo or remote.
 
 ## Harness (all in one scratch dir `$V`)
 
-- `origin.git`: `git init --bare`. Clone it as `git@ssh.dev.azure.com:v3/org/proj/repo`
-  so detection picks Azure DevOps; `GIT_SSH_COMMAND=$V/bin/fake-ssh`.
+- `origin.git`: `git init --bare`. Clone it as `git@github.com:o/r.git`
+  (gflow passes `--repo github.com/o/r` to gh); `GIT_SSH_COMMAND=$V/bin/fake-ssh`.
 - `fake-ssh`: skip `-o X`/`-flag` args (note `-o BatchMode=yes`), drop the host,
-  rewrite `'v3/org/proj/repo'` to `$V/origin.git`, `exec sh -c "$cmd"`. Knobs:
+  rewrite `'o/r.git'` to `$V/origin.git`, `exec sh -c "$cmd"`. Knobs:
   a delay (latency) and "fail when BatchMode" (passphrase key without agent).
-- `fake-az`: log calls; PR state in a tsv (`status source head merge id target`).
-  Serve `extension show`, `pr list` filtered by `--target-branch` or
-  `--source-branch` (rows `status refs/heads/src refs/heads/tgt head merge id`,
-  newest first via `tail -r`), and `create`. A `complete-pr src tgt` helper merges `--no-ff` on origin and
-  marks the row completed with head + merge SHAs.
+- `fake-gh`: log calls; PR state in a tsv (`state head base headSha merge id`).
+  Serve `pr list` filtered by `--head`/`--base`/`--state`, newest first, printing
+  what the `--jq` filter would (the `--json` fields, tab-separated), `pr create`
+  (print the PR URL) and `pr merge`. A `complete-pr head base` helper merges
+  `--no-ff` on origin and marks the row MERGED with head + merge SHAs.
+  `cargo xtask check`'s `xtask/src/fake.rs` is a working reference.
 - Logging `git` wrapper (`exec /usr/bin/git`); optional "reject ahead-behind"
   knob to simulate git < 2.41.
 - `.gflow/config`: `mode=protected`, `bump-strategy=patch`, committed on master.
@@ -40,7 +41,6 @@ that comes first on `PATH`. Never point it at a real repo or remote.
 
 Menu abort during a slow fetch (exit time, fetch finishes detached); fetch that
 needs a prompt (foreground retry); protected release finish over three runs
-(az list calls per run, `push --porcelain` tag skip, one `push --delete` for all
+(gh calls per run, `push --porcelain` tag skip, one `push --delete` for all
 landing branches); work-branch finish with several candidates, with and without
-ahead-behind; a full 1000-row PR list (the head's own list, then reuse); a
-work finish (one `pr list --source-branch` while the fetch runs).
+ahead-behind.

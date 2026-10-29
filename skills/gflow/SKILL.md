@@ -109,7 +109,7 @@ PR bodies resolve from `.github/pr-templates/gflow-<key>.md`, most-specific firs
 1. Branch-specific: `gflow-<type>.md` (e.g. `gflow-release-fix.md`)
 2. Group: the fix family (`fix`, `release-fix`, `hotfix-fix`) shares `gflow-fix.md`; other types' group == their own name
 3. `gflow-default.md`
-4. Repo's git default (`.github/PULL_REQUEST_TEMPLATE.md` etc. on GitHub; `.azuredevops/pull_request_template.md` etc. on Azure DevOps), else empty body
+4. Repo's git default (`.github/PULL_REQUEST_TEMPLATE.md` etc.), else empty body
 
 Opt-in: with no `.github/pr-templates/`, behavior is unchanged.
 
@@ -134,7 +134,7 @@ gflow sync [--accept-merge-type] # merge release into develop (on release/* only
 
 Config migration saves the replacement file before removing old Git keys. A failed save preserves those keys for retry.
 
-Config is three layers, later overriding earlier per key: `~/.gflow/config` (you, all repos; written by `gflow worktree ...`) → `<repo>/.gflow/config` (this repo, committed; `--repo`) → `<repo>/.gflow/config.local` (you, this repo, gitignored; `--local`). A silent layer never undoes a lower one. Layers 1-2 take every key; layer 3 takes only `worktree`/`editor`/`path` — team keys there are warned about and ignored, so nobody can privately opt out of `mode=protected`. gflow maintains `<repo>/.gflow/.gitignore` itself (self-ignoring, so it is never untracked noise) and never edits the repo's own `.gitignore`. 4.0.x `gflow.worktree.*` git config migrates automatically on first run, per scope (global → `~/.gflow/config`, `--local` → `config.local`, which stays uncommitted as it always was); only the detection caches `gflow.branch.main` and `gflow.hosting.provider` stay in git config.
+Config is three layers, later overriding earlier per key: `~/.gflow/config` (you, all repos; written by `gflow worktree ...`) → `<repo>/.gflow/config` (this repo, committed; `--repo`) → `<repo>/.gflow/config.local` (you, this repo, gitignored; `--local`). A silent layer never undoes a lower one. Layers 1-2 take every key; layer 3 takes only `worktree`/`editor`/`path` — team keys there are warned about and ignored, so nobody can privately opt out of `mode=protected`. gflow maintains `<repo>/.gflow/.gitignore` itself (self-ignoring, so it is never untracked noise) and never edits the repo's own `.gitignore`. 4.0.x `gflow.worktree.*` git config migrates automatically on first run, per scope (global → `~/.gflow/config`, `--local` → `config.local`, which stays uncommitted as it always was); only the detection cache `gflow.branch.main` stays in git config.
 
 `.gflow/config` (committed file, not git config — repo policy, not per-clone): `mode=free|protected` (default `free` = today's behavior), `keep-release-branches=true|false` (default `false`; skips deleting `release/*`/`hotfix/*` on finish, work branches unaffected), `bump-strategy=rc|patch` (default `rc`; see Tag Strategy).
 
@@ -225,9 +225,7 @@ Not available for `start release`.
 
 ## Prerequisites
 
-gflow checks `git` at startup; `gh`/`az` and their login are checked on first use (a failure names the fix — re-run after fixing):
+gflow checks `git` at startup; `gh` and its login are checked on first use (a failure names the fix — re-run after fixing):
 - `git` must be installed
-- The hosting provider is auto-detected from the origin remote URL (`dev.azure.com` / `*.visualstudio.com` → Azure DevOps, else GitHub); override with `git config gflow.hosting.provider github|devops`. On GitHub every `gh` call targets the `origin` repository, also in a fork with an `upstream` remote
-- GitHub repos: `gh` installed + `gh auth login` completed
-- Azure DevOps repos: `az` installed + `az extension add --name azure-devops` + authenticated (`az login`, or a PAT via `az devops login`)
+- GitHub only: `gh` installed + `gh auth login` completed. Every `gh` call targets the `origin` repository, also in a fork with an `upstream` remote
 - Uncommitted changes are auto-stashed and restored after the operation

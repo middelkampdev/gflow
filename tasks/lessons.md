@@ -154,3 +154,16 @@ before the first render.
 (stem widths, cap height, ring thickness, gaps) and compare those numbers
 with the source you are about to use. Rebuild only after the numbers agree,
 or state the difference up front and let the user choose.
+
+## Ask about a release only when the work can ship (2026-10-29)
+
+**What happened.** After the editor-gating change passed its tests, I offered
+`/release`. Nothing was committed, nothing was on `develop`, and the change
+sat in the same uncommitted tree as unrelated Azure DevOps removal work.
+
+**Why.** I applied the CLAUDE.md release rule on "tests green" instead of on
+"work integrated".
+
+**Rule.** Offer a release only after the change is committed and on
+`develop`. Before that, the next step to offer is committing or branching,
+and say plainly where the change lives (uncommitted, which branch).

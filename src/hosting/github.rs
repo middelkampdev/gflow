@@ -25,8 +25,7 @@ impl HostingPlatform for GitHub<'_> {
         // The probe must filter by base: a fan-out source branch (a protected
         // hotfix landing on both main and a release branch) can have open PRs
         // to more than one base at once, and a head-only lookup would return
-        // an arbitrary one. ADO's create_or_get_pr already filters by both
-        // --source-branch and --target-branch.
+        // an arbitrary one.
         let existing = self
             .run_gh(&["pr", "list", "--head", head, "--base", base, "--state", "open", "--limit", "1", "--json", "url", "--jq", ".[0].url // empty"])
             .map_err(|e| format!("Could not check for an existing PR: {e}\n{AUTH_REMEDY}"))?;

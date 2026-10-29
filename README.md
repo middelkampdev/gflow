@@ -30,20 +30,11 @@ cargo install --path .
 ### Requirements
 
 - [git](https://git-scm.com/)
-- For GitHub repos: [gh](https://cli.github.com/) (GitHub CLI, authenticated via `gh auth login`)
-- For Azure DevOps repos: [az](https://learn.microsoft.com/cli/azure/) (Azure CLI) with the `azure-devops` extension (`az extension add --name azure-devops`), authenticated via `az login` or a PAT via `az devops login`
+- [gh](https://cli.github.com/) (GitHub CLI, authenticated via `gh auth login`)
 
-### Hosting provider
+### Hosting
 
-gflow auto-detects the hosting provider from the `origin` remote URL: `dev.azure.com` and `*.visualstudio.com` remotes use Azure DevOps (org/project/repo are parsed from the URL), everything else uses GitHub. Only the CLI of the detected provider needs to be installed.
-
-On GitHub, gflow passes the `origin` repository to every `gh` call (`--repo HOST/OWNER/REPO`). In a fork with an `upstream` remote, PRs therefore stay in your fork's repository instead of the parent.
-
-To override detection (e.g. a GitHub Enterprise domain), set:
-
-```bash
-git config gflow.hosting.provider github   # or: devops (requires an Azure DevOps origin URL)
-```
+gflow works with GitHub (including GitHub Enterprise) through `gh`. It passes the `origin` repository to every `gh` call (`--repo HOST/OWNER/REPO`). In a fork with an `upstream` remote, PRs therefore stay in your fork's repository instead of the parent.
 
 ### Mainline branch (`main` or `master`)
 
@@ -336,7 +327,7 @@ When `gflow finish` opens a PR, it picks the body template by branch type. Place
 1. **Branch-specific** — `gflow-<type>.md` (e.g. `gflow-release-fix.md`)
 2. **Group** — the fix family (`fix`, `release-fix`, `hotfix-fix`) shares `gflow-fix.md`; every other type's group equals its own name
 3. **Default** — `gflow-default.md`
-4. **Git default** — the repo's own default template, else an empty body. On GitHub: `.github/PULL_REQUEST_TEMPLATE.md` and the other paths `gh` recognizes. On Azure DevOps: `.azuredevops/pull_request_template.md` and the other ADO default paths.
+4. **Git default** — the repo's own default template, else an empty body. `.github/PULL_REQUEST_TEMPLATE.md` and the other paths `gh` recognizes.
 
 | File | Applies to |
 |------|-----------|
@@ -347,7 +338,7 @@ When `gflow finish` opens a PR, it picks the body template by branch type. Place
 | `gflow-chore.md` / `gflow-docs.md` / `gflow-refactor.md` | `chore/*` / `docs/*` / `refactor/*` |
 | `gflow-default.md` | any PR with no more specific match |
 
-The feature is opt-in: with no `.github/pr-templates/` directory, gflow falls back to the existing git default behavior unchanged. gflow templates live in `.github/pr-templates/` on every hosting provider, including Azure DevOps.
+The feature is opt-in: with no `.github/pr-templates/` directory, gflow falls back to the existing git default behavior unchanged.
 
 ### Release-only commands
 
@@ -680,7 +671,7 @@ This file is committed, so a setting made here applies to everyone who clones th
 Keep machine-specific values (your editor, your worktree directory) in `~/.gflow/config`, or
 in `<repo>/.gflow/config.local` when they apply to one repository only.
 
-Any other value is a hard error naming the file, the key, and the accepted values. This is a **committed file, not git config**: these are team decisions, and a fresh clone must see the same policy everyone else does — git config is per-clone and would silently drift. (Same reasoning as the version script below.) What stays in git config is only what gflow detects and caches for itself: `gflow.branch.main` and `gflow.hosting.provider`.
+Any other value is a hard error naming the file, the key, and the accepted values. This is a **committed file, not git config**: these are team decisions, and a fresh clone must see the same policy everyone else does — git config is per-clone and would silently drift. (Same reasoning as the version script below.) What stays in git config is only what gflow detects and caches for itself: `gflow.branch.main`.
 
 ### Bump strategy: `rc` vs `patch`
 
@@ -1077,9 +1068,8 @@ src/
 │   └── branch.rs        — Branch type detection and parsing
 ├── hosting/
 │   ├── mod.rs           — HostingPlatform trait + CliRunner port
-│   ├── detect.rs        — Provider detection from the origin remote URL
-│   ├── github.rs        — GitHub implementation via gh CLI
-│   └── devops.rs        — Azure DevOps implementation via az CLI
+│   ├── detect.rs        — The GitHub repository from the origin remote URL
+│   └── github.rs        — GitHub implementation via gh CLI
 ├── flows/
 │   ├── start.rs         — Start work/release-fix/hotfix-fix
 │   ├── finish_work.rs   — PR creation for work branches
@@ -1098,7 +1088,7 @@ src/
 └── test_support.rs      — Shared helpers for inline unit tests (test builds only)
 ```
 
-The `Git`, `HostingPlatform`, `Editor`, and `Prompter` traits keep every flow fully mockable and make hosting providers swappable (GitHub and Azure DevOps today, GitLab/Bitbucket-ready).
+The `Git`, `HostingPlatform`, `Editor`, and `Prompter` traits keep every flow fully mockable and keep the hosting provider swappable (GitHub today).
 
 Two narrower ports sit one level down, under the adapters themselves:
 `CommandRunner` (`git/mod.rs`) and `CliRunner` (`hosting/mod.rs`) own nothing but

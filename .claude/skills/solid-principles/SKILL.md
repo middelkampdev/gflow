@@ -46,8 +46,7 @@ When new requirements arrive, you should be able to add new behavior by writing 
 **A port, when the variation is an external system:**
 ```
 HostingPlatform          ← trait (closed for modification)
-├── GitHub    (gh)
-└── AzureDevOps (az)     ← adding a third never touches flows/
+└── GitHub    (gh)       ← adding a second never touches flows/
 ```
 
 **A table, when the variation is data.** `WORK_TYPES` in `git/branch.rs` is the single source of truth for work-branch kinds; menus, parent detection, `pr_template_keys` and `commit_type` all derive from it, so a new kind is a table row plus the arms the compiler demands.
