@@ -2,7 +2,7 @@
 //! first action whose effect on origin differs from the spec, per cycle.
 //!
 //! Each cycle runs in its own temporary directory: a bare origin, a working
-//! clone, and the fakes from `fake.rs`, so gflow sees an Azure DevOps remote.
+//! clone, and the fakes from `fake.rs`, so gflow sees a GitHub remote.
 //! Every action switches to its `on` branch and executes its `run`; the check
 //! then compares the ops on origin (branches, commits, merges, VERSION, tags,
 //! PRs, hooks) and what `gflow deploy-version` prints on each open branch.
@@ -21,7 +21,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub type Refs = BTreeMap<String, String>;
 
 const HOOK: &str = r#"echo "$GFLOW_EVENT $GFLOW_TAG $GFLOW_TAG_KIND $GFLOW_BRANCH" >> "$V/hooks.log""#;
-const REMOTE: &str = "git@ssh.dev.azure.com:v3/org/proj/repo";
 
 pub fn run(args: &[String]) -> Result<(), String> {
     let (gflow, names) = match args {
@@ -257,7 +256,6 @@ impl<'a> Cycle<'a> {
             ("V", v.display().to_string()),
             ("HOME", home.display().to_string()),
             ("GIT_CONFIG_GLOBAL", gitconfig.display().to_string()),
-            ("GIT_SSH_COMMAND", bin.join(fake::SSH).display().to_string()),
             ("PATH", path),
             ("GIT_EDITOR", "true".into()),
             ("NO_COLOR", "1".into()),
@@ -326,7 +324,7 @@ impl<'a> Cycle<'a> {
         let work = self.work.display().to_string();
         let probe = self.probe.display().to_string();
         self.sh_in(&self.v, &["git", "init", "-q", "--bare", &origin])?;
-        self.sh_in(&self.v, &["git", "clone", "-q", REMOTE, &work])?;
+        self.sh_in(&self.v, &["git", "clone", "-q", &origin, &work])?;
         let settings = &self.spec["settings"];
         let mut config: String = ["mode", "bump-strategy", "keep-release-branches"]
             .iter()
@@ -344,7 +342,7 @@ impl<'a> Cycle<'a> {
         self.sh(&["git", "commit", "-qm", "Initial commit"])?;
         self.sh(&["git", "push", "-q", "origin", "main", "main:develop"])?;
         self.sh(&["git", "switch", "-q", "-c", "develop", "--track", "origin/develop"])?;
-        self.sh_in(&self.v, &["git", "clone", "-q", REMOTE, &probe])?;
+        self.sh_in(&self.v, &["git", "clone", "-q", &origin, &probe])?;
         self.sh_in(&self.probe, &["git", "config", "gflow.branch.main", "main"])?;
         let (refs, _) = self.origin_state()?;
         self.known.insert(refs["main"].clone());

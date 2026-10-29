@@ -1,5 +1,4 @@
 pub mod detect;
-pub mod devops;
 pub mod github;
 pub mod template;
 
@@ -71,11 +70,6 @@ pub trait HostingPlatform {
     /// Let the platform merge the landing PR at `url` with a merge commit once
     /// its checks and reviews pass. The landing branch stays, as above.
     fn enable_landing_auto_complete(&self, url: &str) -> Result<()>;
-    /// Load the PRs of `head` now, while other work runs, for the lookups that
-    /// follow. A provider whose lookups are cheap loads nothing.
-    fn prefetch_prs(&self, _head: &str) -> Result<()> {
-        Ok(())
-    }
     fn open_url(&self, url: &str) -> Result<()> {
         open_in_browser(url)
     }
@@ -86,7 +80,7 @@ pub trait HostingPlatform {
     }
 }
 
-/// Port for invoking a hosting CLI (`gh`, `az`, ...). The providers own the
+/// Port for invoking the hosting CLI (`gh`). The adapter owns the
 /// policy — which flags to pass, which failures are normal — and depend on this
 /// trait so that policy is testable without an installed CLI. `SystemCli` is the
 /// only production implementation, keeping "no subprocess calls outside adapter
@@ -143,9 +137,9 @@ mod tests {
 
     #[test]
     fn a_missing_cli_names_itself_as_not_installed() {
-        let err = spawn_error("az", &Error::from(ErrorKind::NotFound));
+        let err = spawn_error("gh", &Error::from(ErrorKind::NotFound));
 
-        assert_eq!(err, "'az' is not installed or not in PATH.");
+        assert_eq!(err, "'gh' is not installed or not in PATH.");
     }
 
     #[test]

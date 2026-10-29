@@ -1,27 +1,24 @@
-//! The tools gflow calls besides git, faked so it sees an Azure DevOps
-//! remote that is a bare repository in `$V/origin.git`. The checker links
-//! this binary under each tool's name; `main` dispatches on that name.
+//! The tools gflow calls besides git, faked so it sees a GitHub remote whose
+//! repository is the bare `$V/origin.git`. The checker links this binary
+//! under each tool's name; `main` dispatches on that name.
 
 use serde_json::{json, Value};
-use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
 pub type Git<'a> = dyn FnMut(&[&str]) -> Result<String, String> + 'a;
 
-pub const SSH: &str = "fake-ssh";
-pub const AZ: &str = "az";
+const GH: &str = "gh";
 const SILENT: [&str; 4] = ["open", "pbcopy", "xdg-open", "code"];
 
 pub fn names() -> impl Iterator<Item = &'static str> {
-    [SSH, AZ].into_iter().chain(SILENT)
+    [GH].into_iter().chain(SILENT)
 }
 
 /// The exit code when `program` is one of the fakes, else None.
 pub fn dispatch(program: &str, args: &[String]) -> Option<ExitCode> {
     let result = match program {
-        SSH => run_ssh(args),
-        AZ => run_az(args),
+        GH => run_gh(args),
         _ if SILENT.contains(&program) => Ok(()),
         _ => return None,
     };
@@ -48,32 +45,7 @@ pub fn origin_git(origin: PathBuf) -> impl FnMut(&[&str]) -> Result<String, Stri
     }
 }
 
-fn run_ssh(args: &[String]) -> Result<(), String> {
-    let origin = root()?.join("origin.git");
-    let command = ssh_command(args, &origin.to_string_lossy());
-    Err(Command::new("sh").arg("-c").arg(command).exec().to_string())
-}
-
-/// What ssh would run on the server, with the Azure DevOps repository path
-/// pointing at the local origin.
-pub fn ssh_command(args: &[String], origin: &str) -> String {
-    let mut rest = args;
-    while let Some(first) = rest.first() {
-        rest = match first.as_str() {
-            "-o" | "-p" | "-i" | "-l" => rest.get(2..).unwrap_or_default(),
-            flag if flag.starts_with('-') => &rest[1..],
-            _ => break,
-        };
-    }
-    let target = format!("'{origin}'");
-    rest.get(1..)
-        .unwrap_or_default()
-        .join(" ")
-        .replacen("'v3/org/proj/repo'", &target, 1)
-        .replacen("'/v3/org/proj/repo'", &target, 1)
-}
-
-fn run_az(args: &[String]) -> Result<(), String> {
+fn run_gh(args: &[String]) -> Result<(), String> {
     let v = root()?;
     let path = v.join("prs.json");
     let mut prs: Vec<Value> = match std::fs::read_to_string(&path) {
@@ -81,7 +53,7 @@ fn run_az(args: &[String]) -> Result<(), String> {
         Err(_) => vec![],
     };
     let before = prs.clone();
-    let out = az(args, &mut prs, &mut origin_git(v.join("origin.git")))?;
+    let out = gh(args, &mut prs, &mut origin_git(v.join("origin.git")))?;
     if prs != before {
         std::fs::write(&path, Value::from(prs).to_string()).map_err(|e| e.to_string())?;
     }
@@ -89,55 +61,71 @@ fn run_az(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Pull requests are rows in `prs`. Completing one squashes it on origin at
-/// once, as the platform does.
-pub fn az(args: &[String], prs: &mut Vec<Value>, origin: &mut Git) -> Result<String, String> {
+fn url(id: usize) -> String {
+    format!("https://github.com/o/r/pull/{id}")
+}
+
+/// Pull requests are rows in `prs`. Merging one squashes it on origin at once,
+/// as the platform does. A list answers what its `--jq` filter would: the
+/// newest match's `--json` fields, and for a merged lookup only a merged PR.
+pub fn gh(args: &[String], prs: &mut Vec<Value>, origin: &mut Git) -> Result<String, String> {
     let words: Vec<&str> = args.iter().map(String::as_str).collect();
     let opt = |name: &str| words.iter().position(|w| *w == name).and_then(|i| words.get(i + 1)).copied();
-    match words.get(..3).unwrap_or(&words) {
-        ["extension", "show", ..] => Ok(String::new()),
-        ["repos", "pr", "list"] => Ok(prs
-            .iter()
-            .rev()
-            .filter(|p| opt("--target-branch").is_none_or(|t| p["target"] == t))
-            .filter(|p| opt("--source-branch").is_none_or(|s| p["source"] == s))
-            .map(|p| {
-                let field = |name: &str| p[name].as_str().unwrap_or_default().to_string();
-                let row = [
-                    field("status"),
-                    format!("refs/heads/{}", field("source")),
-                    format!("refs/heads/{}", field("target")),
-                    field("head"),
-                    field("merge"),
-                    p["id"].to_string(),
-                ];
-                format!("{}\n", row.join("\t"))
-            })
-            .collect()),
-        ["repos", "pr", "create"] => {
+    let has = |name: &str| words.contains(&name);
+    match words.get(..2).unwrap_or(&words) {
+        ["pr", "list"] => {
+            let status = match opt("--state") {
+                Some("open") => Some("active"),
+                Some("merged") => Some("completed"),
+                _ => None,
+            };
+            let fields: Vec<&str> = opt("--json").unwrap_or_default().split(',').collect();
+            let newest = prs
+                .iter()
+                .rev()
+                .filter(|p| opt("--head").is_none_or(|h| p["source"] == h))
+                .filter(|p| opt("--base").is_none_or(|b| p["target"] == b))
+                .find(|p| status.is_none_or(|s| p["status"] == s));
+            let Some(pr) = newest.filter(|p| !fields.contains(&"state") || p["status"] == "completed") else {
+                return Ok(String::new());
+            };
+            let field = |name: &str| pr[name].as_str().unwrap_or_default().to_string();
+            let row: Vec<String> = fields
+                .iter()
+                .filter_map(|f| match *f {
+                    "url" => Some(url(pr["id"].as_u64().unwrap_or_default() as usize)),
+                    "headRefOid" => Some(field("head")),
+                    "mergeCommit" => Some(field("merge")),
+                    "baseRefName" => Some(field("target")),
+                    _ => None,
+                })
+                .collect();
+            Ok(format!("{}\n", row.join("\t")))
+        }
+        ["pr", "create"] => {
             let id = prs.len() + 1;
             prs.push(json!({
-                "id": id, "status": "active", "source": opt("--source-branch"),
-                "target": opt("--target-branch"), "title": opt("--title"),
+                "id": id, "status": "active", "source": opt("--head"),
+                "target": opt("--base"), "title": opt("--title"),
             }));
-            Ok(format!("{id}\n"))
+            Ok(format!("{}\n", url(id)))
         }
-        ["repos", "pr", "update"] => {
-            let id: usize = opt("--id").and_then(|id| id.parse().ok()).ok_or("fake az: update needs --id")?;
-            let pr = prs.get_mut(id - 1).ok_or(format!("fake az: no PR {id}"))?;
-            if opt("--auto-complete") == Some("true") {
+        ["pr", "merge"] => {
+            let target = words.get(2).copied().unwrap_or_default();
+            let id: usize = target.rsplit('/').next().and_then(|id| id.parse().ok()).ok_or(format!("fake gh: no PR in {target}"))?;
+            let pr = prs.get_mut(id - 1).ok_or(format!("fake gh: no PR {id}"))?;
+            if has("--auto") {
                 pr["auto"] = json!(true);
+                return Ok(String::new());
             }
-            if opt("--status") == Some("completed") {
-                let method = if opt("--squash") == Some("false") { "merge" } else { "squash" };
-                complete_pr(pr, method, origin)?;
-                if opt("--delete-source-branch") == Some("true") {
-                    origin(&["update-ref", "-d", &format!("refs/heads/{}", pr["source"].as_str().unwrap_or_default())])?;
-                }
+            let method = if has("--merge") { "merge" } else { "squash" };
+            complete_pr(pr, method, origin)?;
+            if has("--delete-branch") {
+                origin(&["update-ref", "-d", &format!("refs/heads/{}", pr["source"].as_str().unwrap_or_default())])?;
             }
             Ok(String::new())
         }
-        _ => Err(format!("fake az: unsupported {}", words.join(" "))),
+        _ => Err(format!("fake gh: unsupported {}", words.join(" "))),
     }
 }
 
@@ -192,63 +180,52 @@ mod tests {
     }
 
     #[test]
-    fn ssh_runs_the_remote_command_against_the_local_origin() {
-        let command = ssh_command(&args("-o SendEnv=GIT_PROTOCOL -p 22 -4 git@ssh.dev.azure.com git-upload-pack 'v3/org/proj/repo'"), "/v/origin.git");
-        assert_eq!(command, "git-upload-pack '/v/origin.git'");
-    }
-
-    #[test]
-    fn ssh_also_maps_the_path_with_a_leading_slash() {
-        let command = ssh_command(&args("-i key -l git host git-receive-pack '/v3/org/proj/repo'"), "/v/origin.git");
-        assert_eq!(command, "git-receive-pack '/v/origin.git'");
-    }
-
-    #[test]
-    fn az_answers_the_extension_check() {
-        assert_eq!(az(&args("extension show --name azure-devops"), &mut vec![], &mut no_git), Ok(String::new()));
-    }
-
-    #[test]
-    fn az_lists_pull_requests_newest_first_filtered_by_target_and_source() {
+    fn gh_lists_the_newest_pull_request_filtered_by_head_base_and_state() {
         let mut prs = vec![
             json!({"id": 1, "status": "completed", "source": "feature/a", "target": "develop", "head": "h1", "merge": "m1"}),
-            json!({"id": 2, "status": "active", "source": "feature/b", "target": "develop"}),
-            json!({"id": 3, "status": "active", "source": "feature/b", "target": "main"}),
+            json!({"id": 2, "status": "active", "source": "feature/a", "target": "develop"}),
+            json!({"id": 3, "status": "active", "source": "feature/a", "target": "main"}),
         ];
-        let by_target = az(&args("repos pr list --target-branch develop --status all"), &mut prs, &mut no_git);
-        assert_eq!(
-            by_target.unwrap(),
-            "active\trefs/heads/feature/b\trefs/heads/develop\t\t\t2\n\
-             completed\trefs/heads/feature/a\trefs/heads/develop\th1\tm1\t1\n"
-        );
-        let by_source = az(&args("repos pr list --source-branch feature/b"), &mut prs, &mut no_git);
-        assert_eq!(
-            by_source.unwrap(),
-            "active\trefs/heads/feature/b\trefs/heads/main\t\t\t3\n\
-             active\trefs/heads/feature/b\trefs/heads/develop\t\t\t2\n"
-        );
+        let open = gh(&args("pr list --head feature/a --base develop --state open --limit 1 --json url"), &mut prs, &mut no_git);
+        assert_eq!(open.unwrap(), "https://github.com/o/r/pull/2\n");
+        let merged = gh(&args("pr list --head feature/a --base develop --state merged --limit 1 --json url,state,headRefOid,mergeCommit"), &mut prs, &mut no_git);
+        assert_eq!(merged.unwrap(), "https://github.com/o/r/pull/1\th1\tm1\n");
+        let none = gh(&args("pr list --head feature/b --state open --json url"), &mut prs, &mut no_git);
+        assert_eq!(none.unwrap(), "");
     }
 
     #[test]
-    fn az_creates_the_next_pull_request_and_prints_its_id() {
+    fn gh_merged_lookup_answers_only_when_the_newest_pr_is_merged() {
+        let mut prs = vec![
+            json!({"id": 1, "status": "completed", "source": "feature/a", "target": "develop", "head": "h1", "merge": "m1"}),
+            json!({"id": 2, "status": "active", "source": "feature/a", "target": "develop"}),
+        ];
+        let query = "pr list --head feature/a --state all --limit 1 --json url,state,headRefOid,mergeCommit,baseRefName";
+        assert_eq!(gh(&args(query), &mut prs, &mut no_git).unwrap(), "");
+        prs.pop();
+        assert_eq!(gh(&args(query), &mut prs, &mut no_git).unwrap(), "https://github.com/o/r/pull/1\th1\tm1\tdevelop\n");
+    }
+
+    #[test]
+    fn gh_creates_the_next_pull_request_and_prints_its_url() {
         let mut prs = vec![json!({"id": 1})];
-        let out = az(&args("repos pr create --source-branch feature/a --target-branch develop --title feat:"), &mut prs, &mut no_git);
-        assert_eq!(out.unwrap(), "2\n");
+        let out = gh(&args("pr create --head feature/a --base develop --title feat: --body"), &mut prs, &mut no_git);
+        assert_eq!(out.unwrap(), "https://github.com/o/r/pull/2\n");
         assert_eq!(prs[1], json!({"id": 2, "status": "active", "source": "feature/a", "target": "develop", "title": "feat:"}));
     }
 
     #[test]
-    fn az_turns_on_auto_complete() {
+    fn gh_turns_on_auto_merge_without_merging() {
         let mut prs = vec![json!({"id": 1, "status": "active"})];
-        az(&args("repos pr update --id 1 --auto-complete true"), &mut prs, &mut no_git).unwrap();
+        gh(&args("pr merge https://github.com/o/r/pull/1 --auto --squash --delete-branch"), &mut prs, &mut no_git).unwrap();
         assert_eq!(prs[0], json!({"id": 1, "status": "active", "auto": true}));
     }
 
     #[test]
-    fn az_completes_a_pull_request_as_a_squash_and_can_delete_its_source() {
+    fn gh_squash_merges_a_pull_request_and_deletes_its_branch() {
         let mut prs = vec![json!({"id": 1, "status": "active", "source": "feature/a", "target": "develop", "title": "feat: a"})];
         let mut calls = vec![];
-        az(&args("repos pr update --id 1 --status completed --delete-source-branch true"), &mut prs, &mut origin(&mut calls)).unwrap();
+        gh(&args("pr merge https://github.com/o/r/pull/1 --squash --delete-branch"), &mut prs, &mut origin(&mut calls)).unwrap();
         assert_eq!(
             calls,
             [
@@ -268,13 +245,19 @@ mod tests {
     }
 
     #[test]
-    fn az_completes_with_a_merge_commit_when_squash_is_off() {
+    fn gh_merges_with_a_merge_commit_and_keeps_the_branch() {
         let mut prs = vec![json!({"id": 1, "status": "active", "source": "landing/x", "target": "main", "title": "chore: x"})];
         let mut calls = vec![];
-        az(&args("repos pr update --id 1 --status completed --squash false --delete-source-branch false"), &mut prs, &mut origin(&mut calls)).unwrap();
+        gh(&args("pr merge https://github.com/o/r/pull/1 --merge"), &mut prs, &mut origin(&mut calls)).unwrap();
         assert_eq!(calls[3], "commit-tree tree1 -p sha-of-main -p sha-of-landing/x -m Merge PR #1: chore: x");
         assert_eq!(calls.len(), 5, "the source branch stays: {calls:?}");
         assert_eq!(prs[0]["method"], "merge");
+    }
+
+    #[test]
+    fn gh_refuses_a_merge_without_a_known_pull_request() {
+        assert_eq!(gh(&args("pr merge"), &mut vec![], &mut no_git), Err("fake gh: no PR in ".into()));
+        assert_eq!(gh(&args("pr merge https://github.com/o/r/pull/7"), &mut vec![], &mut no_git), Err("fake gh: no PR 7".into()));
     }
 
     #[test]
@@ -287,8 +270,8 @@ mod tests {
     }
 
     #[test]
-    fn az_refuses_what_it_does_not_fake() {
-        let out = az(&args("repos pr abandon --id 1"), &mut vec![], &mut no_git);
-        assert_eq!(out, Err("fake az: unsupported repos pr abandon --id 1".into()));
+    fn gh_refuses_what_it_does_not_fake() {
+        let out = gh(&args("pr close 1"), &mut vec![], &mut no_git);
+        assert_eq!(out, Err("fake gh: unsupported pr close 1".into()));
     }
 }

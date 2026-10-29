@@ -109,11 +109,6 @@ pub fn run(
     let hooks = Hooks::prepare(git, hook_env)?;
 
     println!("Fetching latest...");
-    // The flow's first question is about this branch's PRs, and the answer
-    // does not depend on the fetch.
-    if matches!(action, Action::FinishWorkBranch { .. } | Action::FinishReleaseFix | Action::FinishHotfixFix) {
-        hosting.prefetch_prs(&branch_name)?;
-    }
     git.fetch()?;
 
     // Optional worktree flow: when enabled (and not opted out) for a start, treat

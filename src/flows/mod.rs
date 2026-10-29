@@ -1633,8 +1633,8 @@ mod tests {
     fn pr_block_is_a_bare_title_line_then_a_bare_url_line() {
         // The Slack-pasteable payload: no prefixes, no indentation, no chrome
         // (12-factor CLI: decorated lines break copy-paste).
-        let block = pr_block("feat: edit confluence skill", "https://dev.azure.com/x/pullrequest/2698", false);
-        assert_eq!(block, "feat: edit confluence skill\nhttps://dev.azure.com/x/pullrequest/2698");
+        let block = pr_block("feat: edit confluence skill", "https://github.com/o/r/pull/2698", false);
+        assert_eq!(block, "feat: edit confluence skill\nhttps://github.com/o/r/pull/2698");
     }
 
     #[test]

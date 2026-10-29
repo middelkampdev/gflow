@@ -58,7 +58,7 @@ resolved branch.
 
 #### Worktree integration (optional)
 
-When `worktree=true`, every `start` creates the branch in a native git worktree and opens it in an editor instead of switching the current checkout (`start release` creates and tags in the current checkout first, returns it to `develop`, then opens the release worktree; a release already held by a worktree is only announced). `start hotfix-fix` also opens a worktree for the `hotfix/{v}` container branch — before the fix branch's own worktree, so the fix keeps editor focus; a hotfix already held by a worktree is only announced. After creating a worktree and before opening the editor, gflow runs the repo's `.cursor/worktrees.json` / `worktrees.json` setup commands if present (Cursor / worktree-cli format: each entry a shell command in the new worktree, `$ROOT_WORKTREE_PATH` = main checkout, failures reported and the rest still run, never fails the start). Strict JSON only; an unparsable file warns (naming file + byte offset, trailing commas called out) and is skipped — it never blocks a command, and with the flow disabled it is not read. No prompt, no config — the committed file is the opt-in. Config keys (in the layered config files, not git config): `worktree` (bool, default false), `editor` (default `code`; `none` skips opening), `path` (base dir, default repo's parent, `~` expanded). Folder name: `<repo-name>-<branch-with-slashes-as-dashes>`. `--no-worktree` skips it for one command. Like `--no-checkout`, active worktree mode relaxes the branch-type check for `release-fix`/`hotfix-fix` (target branch is discovered automatically) — but standing on a `release/{v}`/`hotfix/{v}` branch still wins over discovery, and discovery takes the newest open version.
+When `worktree=true`, every `start` creates the branch in a native git worktree and opens it in an editor instead of switching the current checkout (`start release` creates and tags in the current checkout first, returns it to `develop`, then opens the release worktree; a release already held by a worktree is only announced). `start hotfix-fix` also opens a worktree for the `hotfix/{v}` container branch — before the fix branch's own worktree, so the fix keeps editor focus; a hotfix already held by a worktree is only announced. After creating a worktree and before opening the editor, gflow runs the repo's `.cursor/worktrees.json` / `worktrees.json` setup commands if present (Cursor / worktree-cli format: each entry a shell command in the new worktree, `$ROOT_WORKTREE_PATH` = main checkout, failures reported and the rest still run, never fails the start). Strict JSON only; an unparsable file warns (naming file + byte offset, trailing commas called out) and is skipped — it never blocks a command, and with the flow disabled it is not read. No prompt, no config — the committed file is the opt-in. Config keys (in the layered config files, not git config): `worktree` (bool, default false), `editor` (default `code`; `none` skips opening; opened only from the interactive menu — subcommands never open it), `path` (base dir, default repo's parent, `~` expanded). Folder name: `<repo-name>-<branch-with-slashes-as-dashes>`. `--no-worktree` skips it for one command. Like `--no-checkout`, active worktree mode relaxes the branch-type check for `release-fix`/`hotfix-fix` (target branch is discovered automatically) — but standing on a `release/{v}`/`hotfix/{v}` branch still wins over discovery, and discovery takes the newest open version.
 
 `finish` (release/hotfix) works from any worktree: a merge target checked out in another worktree is merged there in place (`git -C`); that tree must be clean or gflow refuses, naming the path.
 
@@ -109,7 +109,7 @@ PR bodies resolve from `.github/pr-templates/gflow-<key>.md`, most-specific firs
 1. Branch-specific: `gflow-<type>.md` (e.g. `gflow-release-fix.md`)
 2. Group: the fix family (`fix`, `release-fix`, `hotfix-fix`) shares `gflow-fix.md`; other types' group == their own name
 3. `gflow-default.md`
-4. Repo's git default (`.github/PULL_REQUEST_TEMPLATE.md` etc. on GitHub; `.azuredevops/pull_request_template.md` etc. on Azure DevOps), else empty body
+4. Repo's git default (`.github/PULL_REQUEST_TEMPLATE.md` etc.), else empty body
 
 Opt-in: with no `.github/pr-templates/`, behavior is unchanged.
 
@@ -134,7 +134,7 @@ gflow sync [--accept-merge-type] # merge release into develop (on release/* only
 
 Config migration saves the replacement file before removing old Git keys. A failed save preserves those keys for retry.
 
-Config is three layers, later overriding earlier per key: `~/.gflow/config` (you, all repos; written by `gflow worktree ...`) → `<repo>/.gflow/config` (this repo, committed; `--repo`) → `<repo>/.gflow/config.local` (you, this repo, gitignored; `--local`). A silent layer never undoes a lower one. Layers 1-2 take every key; layer 3 takes only `worktree`/`editor`/`path` — team keys there are warned about and ignored, so nobody can privately opt out of `mode=protected`. gflow maintains `<repo>/.gflow/.gitignore` itself (self-ignoring, so it is never untracked noise) and never edits the repo's own `.gitignore`. 4.0.x `gflow.worktree.*` git config migrates automatically on first run, per scope (global → `~/.gflow/config`, `--local` → `config.local`, which stays uncommitted as it always was); only the detection caches `gflow.branch.main` and `gflow.hosting.provider` stay in git config.
+Config is three layers, later overriding earlier per key: `~/.gflow/config` (you, all repos; written by `gflow worktree ...`) → `<repo>/.gflow/config` (this repo, committed; `--repo`) → `<repo>/.gflow/config.local` (you, this repo, gitignored; `--local`). A silent layer never undoes a lower one. Layers 1-2 take every key; layer 3 takes only `worktree`/`editor`/`path` — team keys there are warned about and ignored, so nobody can privately opt out of `mode=protected`. gflow maintains `<repo>/.gflow/.gitignore` itself (self-ignoring, so it is never untracked noise) and never edits the repo's own `.gitignore`. 4.0.x `gflow.worktree.*` git config migrates automatically on first run, per scope (global → `~/.gflow/config`, `--local` → `config.local`, which stays uncommitted as it always was); only the detection cache `gflow.branch.main` stays in git config.
 
 `.gflow/config` (committed file, not git config — repo policy, not per-clone): `mode=free|protected` (default `free` = today's behavior), `keep-release-branches=true|false` (default `false`; skips deleting `release/*`/`hotfix/*` on finish, work branches unaffected), `bump-strategy=rc|patch` (default `rc`; see Tag Strategy).
 
@@ -225,9 +225,7 @@ Not available for `start release`.
 
 ## Prerequisites
 
-gflow checks `git` at startup; `gh`/`az` and their login are checked on first use (a failure names the fix — re-run after fixing):
+gflow checks `git` at startup; `gh` and its login are checked on first use (a failure names the fix — re-run after fixing):
 - `git` must be installed
-- The hosting provider is auto-detected from the origin remote URL (`dev.azure.com` / `*.visualstudio.com` → Azure DevOps, else GitHub); override with `git config gflow.hosting.provider github|devops`. On GitHub every `gh` call targets the `origin` repository, also in a fork with an `upstream` remote
-- GitHub repos: `gh` installed + `gh auth login` completed
-- Azure DevOps repos: `az` installed + `az extension add --name azure-devops` + authenticated (`az login`, or a PAT via `az devops login`)
+- GitHub only: `gh` installed + `gh auth login` completed. Every `gh` call targets the `origin` repository, also in a fork with an `upstream` remote
 - Uncommitted changes are auto-stashed and restored after the operation

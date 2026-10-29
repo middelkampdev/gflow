@@ -182,7 +182,7 @@ Change gflow after the spec is agreed. Never edit `spec/replay.html` by hand.
 
 `cargo xtask check [--gflow PATH] [cycle ...]` proves gflow follows the spec:
 it replays every action's `run` (on its `on` branch) with the real release
-binary on a fake Azure DevOps remote in a temp dir, and names the first action
+binary on a fake GitHub remote in a temp dir, and names the first action
 whose ops, flag, or `deploy-version` output differ. It uses real git, so it is a
 dev tool and a CI job, never part of `cargo test` (only its pure helpers are).
 Do not run two at once in one checkout's `target/`.

@@ -50,7 +50,7 @@ fn run_lifecycle(git: &MockGit, command: Option<Commands>) -> Result<(), String>
     let hosting = MockHosting::new();
     let prompter = MockPrompter::new();
     let editor = MockEditor::new();
-    run(git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None }, &no_hooks(), &RepoConfig::default(), None, command)
+    run(git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, &no_hooks(), &RepoConfig::default(), None, command)
 }
 
 // --- The --accept-merge-type flag reaches the flows ---
@@ -77,7 +77,7 @@ fn merged_feature_hosting() -> MockHosting {
 fn run_with(git: &MockGit, hosting: &MockHosting, command: Option<Commands>) -> Result<(), String> {
     let prompter = MockPrompter::new();
     let editor = MockEditor::new();
-    run(git, hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None }, &no_hooks(), &RepoConfig::default(), None, command)
+    run(git, hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, &no_hooks(), &RepoConfig::default(), None, command)
 }
 
 #[test]
@@ -117,11 +117,11 @@ fn sync_forwards_the_accept_flag_to_the_landing_check() {
     let editor = MockEditor::new();
     let cfg = RepoConfig { mode: Mode::Protected, ..RepoConfig::default() };
 
-    let refused = run(&git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None }, &no_hooks(), &cfg, None,
+    let refused = run(&git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, &no_hooks(), &cfg, None,
         Some(Commands::Sync { accept_merge_type: false }));
     assert!(refused.unwrap_err().contains("--accept-merge-type"));
 
-    run(&git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None }, &no_hooks(), &cfg, None,
+    run(&git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, &no_hooks(), &cfg, None,
         Some(Commands::Sync { accept_merge_type: true })).unwrap();
 }
 
@@ -188,7 +188,7 @@ fn protected_finish_writes_no_state_file() {
     let prompter = MockPrompter::new();
     let editor = MockEditor::new();
 
-    let result = run(&git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None }, &no_hooks(), &protected_cfg(), None, finish_cmd());
+    let result = run(&git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, &no_hooks(), &protected_cfg(), None, finish_cmd());
 
     assert!(result.is_ok(), "a pending landing is not a failure: {result:?}");
     assert!(!state_path(&git.git_dir).exists(),
@@ -210,7 +210,7 @@ fn protected_finish_rejects_dirty_tree() {
     let prompter = MockPrompter::new();
     let editor = MockEditor::new();
 
-    let err = run(&git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None }, &no_hooks(), &protected_cfg(), None, finish_cmd()).unwrap_err();
+    let err = run(&git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, &no_hooks(), &protected_cfg(), None, finish_cmd()).unwrap_err();
 
     assert_eq!(err, "Working tree is not clean. Commit your changes before finishing.");
     let calls = git.calls();
@@ -277,7 +277,7 @@ fn run_protected(git: &MockGit, command: Option<Commands>) -> Result<(), String>
     let hosting = MockHosting::new();
     let prompter = MockPrompter::new();
     let editor = MockEditor::new();
-    run(git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None }, &no_hooks(), &protected_cfg(), None, command)
+    run(git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, &no_hooks(), &protected_cfg(), None, command)
 }
 
 #[test]
@@ -520,7 +520,7 @@ fn enabled_wt_config() -> WorktreeConfig {
 }
 
 fn run_with_worktree(git: &MockGit, command: Option<Commands>) -> Result<(), String> {
-    run(git, &MockHosting::new(), &MockPrompter::new(), &WorktreeEnv { config: &enabled_wt_config(), editor: &MockEditor::new(), setup: &MockWorktreeSetup::new(), commands: None }, &no_hooks(), &RepoConfig::default(), None, command)
+    run(git, &MockHosting::new(), &MockPrompter::new(), &WorktreeEnv { config: &enabled_wt_config(), editor: &MockEditor::new(), setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, &no_hooks(), &RepoConfig::default(), None, command)
 }
 
 #[test]
@@ -620,7 +620,7 @@ fn finish_fix_branches_dispatch_and_target_their_parent_branch() {
         let prompter = MockPrompter::new();
         let editor = MockEditor::new();
 
-        run(&git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None }, &no_hooks(), &RepoConfig::default(), None, finish_cmd())
+        run(&git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, &no_hooks(), &RepoConfig::default(), None, finish_cmd())
             .unwrap_or_else(|error| panic!("{current}: {error}"));
 
         assert!(hosting.calls().iter().any(|c| c.starts_with(&format!("create_or_get_pr:{current}:{parent}:"))),
@@ -838,7 +838,7 @@ fn finish_work_branch_dispatches_with_its_resolved_pr_template() {
     let prompter = MockPrompter::scripted(&[0]); // "no" to breaking changes
     let editor = MockEditor::new();
 
-    run(&git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None }, &no_hooks(), &RepoConfig::default(), None, finish_cmd()).unwrap();
+    run(&git, &hosting, &prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, &no_hooks(), &RepoConfig::default(), None, finish_cmd()).unwrap();
 
     assert!(hosting.calls().iter().any(|c| c.starts_with("create_or_get_pr:feature/login:develop:feat: login")),
         "calls: {:?}", hosting.calls());
@@ -891,7 +891,7 @@ fn no_subcommand_falls_through_to_the_interactive_menu() {
 
 fn run_menu(git: &MockGit, prompter: &MockPrompter) -> Result<(), String> {
     let editor = MockEditor::new();
-    run(git, &MockHosting::new(), prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None }, &no_hooks(), &RepoConfig::default(), None, None)
+    run(git, &MockHosting::new(), prompter, &WorktreeEnv { config: &wt_config(), editor: &editor, setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, &no_hooks(), &RepoConfig::default(), None, None)
 }
 
 #[test]
@@ -945,45 +945,6 @@ fn an_abort_never_fetches() {
 
     let calls = git.calls();
     assert!(!calls.iter().any(|c| c == "start_fetch" || c == "fetch"), "calls: {calls:?}");
-}
-
-#[test]
-fn a_work_finish_asks_for_its_prs_while_the_fetch_runs() {
-    // The answer does not depend on the fetch, and on Azure it costs seconds.
-    let mut git = MockGit::with_tmp_git_dir("gflow-lifecycle-prefetch-order");
-    git.current_branch = "feature/x".to_string();
-    git.config.insert(MAIN_BRANCH_KEY.to_string(), "main".to_string());
-    let mut hosting = MockHosting::new();
-    hosting.fail_call = Some(("prefetch_prs:feature/x".to_string(), 1));
-
-    let error = run_with(&git, &hosting, finish_cmd()).unwrap_err();
-
-    assert_eq!(error, "injected hosting failure: prefetch_prs:feature/x");
-    assert_eq!(git.calls(), vec!["current_branch", "git_dir", "get_config:gflow.branch.main", "start_fetch", "is_mid_merge", "has_unmerged_paths"],
-        "asked after the fetch started, before waiting for it, before any change");
-}
-
-#[test]
-fn only_work_finishes_prefetch_their_prs() {
-    let feature_finish = Some(Commands::Finish { breaking: Some(false), base: None, abort: false, accept_merge_type: false, no_hooks: false });
-    let start_release = Some(Commands::Start { kind: StartKind::Release { major: false, minor: true, no_worktree: true, no_hooks: false } });
-    for (branch, command, prefetched) in [
-        ("feature/x", feature_finish, true),
-        ("release-fix/2.5.0/login", finish_cmd(), true),
-        ("hotfix-fix/2.4.1/login", finish_cmd(), true),
-        ("develop", start_release, false),
-    ] {
-        let mut git = MockGit::with_tmp_git_dir("gflow-lifecycle-prefetch-scope");
-        git.current_branch = branch.to_string();
-        git.tags = vec!["v2.4.0".to_string()];
-        let hosting = MockHosting::new();
-
-        run_with(&git, &hosting, command).unwrap();
-
-        let calls = hosting.calls();
-        assert_eq!(calls.first() == Some(&format!("prefetch_prs:{branch}")), prefetched, "{branch}: {calls:?}");
-        assert_eq!(calls.iter().filter(|c| c.starts_with("prefetch_prs:")).count(), usize::from(prefetched), "{branch}: {calls:?}");
-    }
 }
 
 #[test]
@@ -1057,6 +1018,7 @@ fn run_unattended(
             editor: &MockEditor::new(),
             setup: &MockWorktreeSetup::new(),
             commands: None,
+            open_editor: true,
         },
         &no_hooks(),
         cfg,
@@ -1270,8 +1232,7 @@ fn missing_template_root_stops_each_finish_before_publication() {
             "injected git failure: worktree_root"
         );
         assert_eq!(git.calls().last().unwrap(), "worktree_root");
-        let calls = hosting.calls();
-        assert!(calls.iter().all(|call| call.starts_with("prefetch_prs:")), "only reads before publication: {calls:?}");
+        assert_eq!(hosting.calls(), Vec::<String>::new(), "nothing reaches the platform before publication");
     }
 }
 
@@ -1294,7 +1255,7 @@ fn failed_fix_finish_keeps_branches_and_reports_the_hosting_error() {
             .calls()
             .iter()
             .any(|call| call.starts_with("delete_") || call.starts_with("push:")));
-        assert_eq!(hosting.calls(), [format!("prefetch_prs:{branch}"), failure]);
+        assert_eq!(hosting.calls(), [failure]);
     }
 }
 
@@ -1439,7 +1400,7 @@ impl HookWorld {
 }
 
 fn run_hooked(git: &MockGit, hosting: &MockHosting, env: &HookEnv<'_>, cfg: &RepoConfig, command: Commands) -> Result<(), String> {
-    run(git, hosting, &MockPrompter::new(), &WorktreeEnv { config: &wt_config(), editor: &MockEditor::new(), setup: &MockWorktreeSetup::new(), commands: None }, env, cfg, None, Some(command))
+    run(git, hosting, &MockPrompter::new(), &WorktreeEnv { config: &wt_config(), editor: &MockEditor::new(), setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, env, cfg, None, Some(command))
 }
 
 fn fired_once(event: HookEvent, tag: &str, kind: &str, branch: &str) -> Fired {
@@ -1624,7 +1585,7 @@ fn an_unapproved_hook_asks_through_the_runs_prompter() {
     };
     let prompter = MockPrompter::new().with_lines(&["y"]);
 
-    run(&git, &MockHosting::new(), &prompter, &WorktreeEnv { config: &wt_config(), editor: &MockEditor::new(), setup: &MockWorktreeSetup::new(), commands: None }, &env, &rc(), None, Some(Commands::Bump { no_hooks: false })).unwrap();
+    run(&git, &MockHosting::new(), &prompter, &WorktreeEnv { config: &wt_config(), editor: &MockEditor::new(), setup: &MockWorktreeSetup::new(), commands: None, open_editor: true }, &env, &rc(), None, Some(Commands::Bump { no_hooks: false })).unwrap();
 
     assert_eq!(prompter.calls(), vec!["prompt_line:Hook for release-bump: deploy\nRun this hook? [y/N]"]);
     assert_eq!(shell.commands(), vec!["deploy"]);

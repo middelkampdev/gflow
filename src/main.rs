@@ -6,11 +6,10 @@ use clap::Parser;
 use gflow::cli::{Commands, WorktreeAction};
 use gflow::git::{GitCli, SystemRunner};
 use gflow::git::Git;
-use gflow::hosting::detect::{self, Provider};
-use gflow::hosting::devops::AzureDevOps;
+use gflow::hosting::detect;
 use gflow::hosting::github::GitHub;
 use gflow::hooks::{self, HookEnv, ShellHook};
-use gflow::hosting::{HostingPlatform, SystemCli};
+use gflow::hosting::SystemCli;
 use gflow::lifecycle;
 use gflow::menu::MenuPrompter;
 use gflow::editor::CommandEditor;
@@ -72,7 +71,7 @@ fn run(command: Option<Commands>) -> Result<(), String> {
         other => other,
     };
 
-    // Provider detection reads the origin remote, so the repo check comes first.
+    // The hosting adapter reads the origin remote, so the repo check comes first.
     let current_branch = git.current_branch().map_err(|_| "Not in a git repository.".to_string())?;
 
     // Eager resolve: a platform-mismatched committed script errors on every
@@ -99,7 +98,7 @@ fn run(command: Option<Commands>) -> Result<(), String> {
     let script_path = version_script::resolve(&root)?;
     let script = script_path.map(|path| ScriptCli::new(path, root.clone()));
 
-    let hosting = create_hosting(&git)?;
+    let hosting = GitHub::new(detect::origin_repo(&git), &SystemCli);
     let editor = CommandEditor::new(wt_config.editor.clone());
     let (setup_commands, setup_warning) = worktree_setup::resolve(&root, wt_config.enabled);
     if let Some(warning) = setup_warning {
@@ -110,6 +109,7 @@ fn run(command: Option<Commands>) -> Result<(), String> {
         editor: &editor,
         setup: &ShellSetup,
         commands: setup_commands.as_ref(),
+        open_editor: command.is_none(),
     };
     let prompter = MenuPrompter;
     let hook_env = HookEnv {
@@ -121,7 +121,7 @@ fn run(command: Option<Commands>) -> Result<(), String> {
 
     lifecycle::run(
         &git,
-        &*hosting,
+        &hosting,
         &prompter,
         &worktree_env,
         &hook_env,
@@ -129,16 +129,6 @@ fn run(command: Option<Commands>) -> Result<(), String> {
         script.as_ref().map(|s| s as &dyn VersionScript),
         command,
     )
-}
-
-/// Detect the hosting provider for this repo. No up-front CLI or auth check:
-/// `az` alone takes seconds to answer one, and every flow is rerun-safe, so a
-/// missing CLI or expired login surfaces on the first real call instead.
-fn create_hosting(git: &dyn Git) -> Result<Box<dyn HostingPlatform>, String> {
-    Ok(match detect::detect(git)? {
-        Provider::GitHub { repo } => Box::new(GitHub::new(repo, &SystemCli)),
-        Provider::AzureDevOps { org, project, repo } => Box::new(AzureDevOps::new(org, project, repo, &SystemCli)),
-    })
 }
 
 fn check_command_exists(cmd: &str) -> Result<(), String> {

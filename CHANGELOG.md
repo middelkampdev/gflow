@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.0] - 2026-10-29
+
+### Changed
+- With the worktree flow on, only the interactive menu (`gflow` with no subcommand) opens the new worktree in the editor. Subcommands such as `gflow start feature --name x` create the worktree and print its path, but open no editor.
+
+### Removed
+- **Breaking:** Azure DevOps support. gflow now works with GitHub only, through `gh`; `az` is no longer used. A `dev.azure.com` or `*.visualstudio.com` origin is treated like any other remote and goes to `gh`, which fails.
+- **Breaking:** the `gflow.hosting.provider` git config key. gflow ignores it; remove it with `git config --unset gflow.hosting.provider`.
+
 ## [7.0.0] - 2026-10-25
 
 ### Changed
@@ -353,6 +362,7 @@ No change to the `gflow` binary or the plugin skill. This release brings reposit
 - Cross-platform CI/CD with GitHub Actions (macOS x86_64, macOS ARM64, Windows)
 - README with mermaid diagrams documenting the branch model and workflows
 
+[8.0.0]: https://github.com/middelkampdev/gflow/compare/v7.0.0...v8.0.0
 [7.0.0]: https://github.com/middelkampdev/gflow/compare/v6.3.0...v7.0.0
 [6.3.0]: https://github.com/middelkampdev/gflow/compare/v6.2.0...v6.3.0
 [6.2.0]: https://github.com/jopmiddelkamp/gflow/compare/v6.1.0...v6.2.0
